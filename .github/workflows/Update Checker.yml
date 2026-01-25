@@ -56,7 +56,7 @@ jobs:
           echo "Trigger build for realme UI 6"
           gh api \
             -X POST \
-            /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra OnePlus.yml"/dispatches \
+            /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra Realme GT5.yml"/dispatches \
             -f ref=${{ github.ref }} \
             -f inputs[FILE]=realme_gt5_v
             -f inputs[FROM_UPDATE]=true
@@ -64,7 +64,7 @@ jobs:
           echo "Trigger build for realme UI 7"
           gh api \
             -X POST \
-            /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra OnePlus.yml"/dispatches \
+            /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra Realme GT5.yml"/dispatches \
             -f ref=${{ github.ref }} \
             -f inputs[FILE]=realme_gt5_b
             -f inputs[FROM_UPDATE]=true
