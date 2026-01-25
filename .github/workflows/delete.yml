@@ -7,9 +7,9 @@ on:
         type: choice
         description: '清理的工作流名称'
         required: true
-        default: 'Build OnePlus_SukiSU Ultra All'
+        default: 'Build SukiSU Ultra Realme GT5'
         options:
-          - Build OnePlus_SukiSU Ultra All
+          - Build SukiSU Ultra Realme GT5
           - CAll Build Start UP
           - Build TEST
           - Build TEST2
