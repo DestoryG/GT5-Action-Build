@@ -1,0 +1,68 @@
+name: Update Checker
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  UPSTREAM_REPO: SukiSU-Ultra/SukiSU-Ultra
+  UPSTREAM_BRANCH: builtin
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 0 0 * * *   # 每天 00:00 UTC 检查
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get latest upstream commit
+        id: upstream
+        run: |
+          latest=$(git ls-remote https://github.com/${UPSTREAM_REPO}.git ${UPSTREAM_BRANCH} | cut -f1)
+          echo "latest=$latest" >> $GITHUB_OUTPUT
+          echo "Upstream latest commit: $latest"
+
+      - name: Compare with last built commit
+        id: compare
+        run: |
+          echo "Last built commit: ${{ vars.LAST_BUILT_COMMIT }}"
+          if [ "${{ vars.LAST_BUILT_COMMIT }}" = "${{ steps.upstream.outputs.latest }}" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No update detected"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Update detected"
+          fi
+
+      - name: Save pending upstream commit
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_MANAGE_TOKEN }}
+        run: |
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/variables/PENDING_UPSTREAM_COMMIT \
+            -f value=${{ steps.upstream.outputs.latest }}
+
+      - name: Trigger build workflow
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_MANAGE_TOKEN }}
+        run: |
+          echo "Trigger build for realme UI 6"
+          gh api \
+            -X POST \
+            /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra OnePlus.yml"/dispatches \
+            -f ref=${{ github.ref }} \
+            -f inputs[FILE]=realme_gt5_v
+
+          echo "Trigger build for realme UI 7"
+          gh api \
+            -X POST \
+            /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra OnePlus.yml"/dispatches \
+            -f ref=${{ github.ref }} \
+            -f inputs[FILE]=realme_gt5_b
