@@ -7,7 +7,7 @@ run-name: >
       github.event.inputs.FILE == 'realme_gt5_b' && 'Build For Realme UI 5'
     )
     ||
-    'Build SukiSU Ultra OnePlus'
+    'Build SukiSU Ultra Realme GT5'
   }}
 on:
   workflow_dispatch:
