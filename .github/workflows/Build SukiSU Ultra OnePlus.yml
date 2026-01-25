@@ -933,107 +933,57 @@ jobs:
         if: ${{ github.event.inputs.FAST_BUILD == 'true' }}
         id: fast_build
         run: |
+          KERNEL_VERSION="${{ env.KERNEL_VERSION }}"
           cd kernel_workspace/kernel_platform
-          # =========================================================
-          # 增强型 Clang 动态检测逻辑 (针对 Realme/OnePlus 源码优化)
-          # =========================================================
 
-          # 定义抓取函数：兼容空格、Tab、export关键字、引号等情况
-          get_config_var() {
-            local var_name=$1
-            local search_path=$2
-            if [ -f "$search_path" ]; then
-              grep -Erh "^[[:space:]]*(export[[:space:]]+)?${var_name}[[:space:]]*=" "$search_path" 2>/dev/null | \
-              tail -n1 | cut -d'=' -f2- | \
-              sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//'
-            fi
-          }
-
-          echo "🔍 开始动态检测 Clang 工具链版本..."
-          
-          # 1. 优先获取 CLANG_VERSION (通常在 build.config.constants)
-          CLANG_VER=$(get_config_var "CLANG_VERSION" "./common/build.config.constants")
-          # 如果 constants 里没有，再去 common 里找
-          if [ -z "$CLANG_VER" ]; then
-             CLANG_VER=$(get_config_var "CLANG_VERSION" "./common/build.config.common")
-          fi
-          echo "📝 获取到的 CLANG_VERSION: $CLANG_VER"
-
-          # 2. 获取原始的 CLANG_PREBUILT_BIN 路径定义
-          RAW_BIN_PATH=$(get_config_var "CLANG_PREBUILT_BIN" "./common/build.config.common")
-          echo "📝 原始路径定义: $RAW_BIN_PATH"
-
-          # 3. 智能解析与变量替换
-          FINAL_BIN_PATH=""
-          
-          # 情况A: 如果路径里包含变量占位符 (如 ${CLANG_VERSION}) 且我们抓到了版本号
-          if [[ "$RAW_BIN_PATH" == *"\${CLANG_VERSION}"* || "$RAW_BIN_PATH" == *"\$CLANG_VERSION"* ]] && [[ -n "$CLANG_VER" ]]; then
-             echo "🔄 检测到变量引用，正在替换..."
-             FINAL_BIN_PATH=$(echo "$RAW_BIN_PATH" | sed "s|\${CLANG_VERSION}|$CLANG_VER|g;s|\$CLANG_VERSION|$CLANG_VER|g")
-          
-          # 情况B: 如果路径里已经写死了版本号 (如 clang-r450784e)
-          elif [[ "$RAW_BIN_PATH" =~ (clang-r[0-9a-z]+) ]]; then
-             FINAL_BIN_PATH="$RAW_BIN_PATH"
-          
-          # 情况C: 如果没抓到 RAW_PATH 但抓到了版本号 (兜底策略)
-          elif [[ -z "$RAW_BIN_PATH" && -n "$CLANG_VER" ]]; then
-             echo "⚠️ 未找到路径定义，尝试构建标准路径..."
-             FINAL_BIN_PATH="prebuilts/clang/host/linux-x86/clang-$CLANG_VER/bin"
-          fi
-
-          # 4. 路径验证与修正
-          # 确保路径是相对于 kernel_platform 的
-          if [[ -n "$FINAL_BIN_PATH" ]]; then
-             # 移除可能存在的 ./ 前缀
-             FINAL_BIN_PATH=${FINAL_BIN_PATH#./}
-             
-             # 组装绝对路径
-             ABS_CLANG_PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/$FINAL_BIN_PATH"
-             
-             # 验证目录是否存在
-             if [ -d "$ABS_CLANG_PATH" ]; then
-                echo "✅ 路径验证成功: $ABS_CLANG_PATH"
-                export PATH="$ABS_CLANG_PATH:$PATH"
-             else
-                echo "❌ 路径不存在: $ABS_CLANG_PATH"
-                echo "尝试模糊搜索..."
-                # 最后的挣扎：在 prebuilts 目录下搜 clang-版本号
-                if [[ -n "$CLANG_VER" ]]; then
-                   FOUND_PATH=$(find kernel_workspace/kernel_platform/prebuilts -type d -name "clang-$CLANG_VER" 2>/dev/null | head -n1)
-                   if [[ -n "$FOUND_PATH" ]]; then
-                      echo "✅ 模糊搜索找到路径: $FOUND_PATH/bin"
-                      export PATH="$FOUND_PATH/bin:$PATH"
-                   else
-                      echo "❌ 致命错误：无法找到可用的 Clang 工具链。"
-                      echo "fallback=true" >> "$GITHUB_OUTPUT"
-                      exit 0
-                   fi
-                else
-                   echo "fallback=true" >> "$GITHUB_OUTPUT"
-                   exit 0
-                fi
-             fi
-          else
-             echo "❌ 无法解析 Clang 信息，回退到官方脚本。"
-             echo "fallback=true" >> "$GITHUB_OUTPUT"
-             exit 0
-          fi
-          
-          # 5. 检测 LLVM_IAS
-          USE_LLVM_IAS=false
-          if [ -f ./common/build.config.arm ] && grep -q '^LLVM_IAS=1' ./common/build.config.arm; then
+          # 自动检测 LLVM_IAS
+          if [[ -f ./common/build.config.arm ]] && grep -q '^LLVM_IAS=1' ./common/build.config.arm; then
             USE_LLVM_IAS=true
+          else
+            USE_LLVM_IAS=false
           fi
+
+          # 从 build.config.common 读取 CLANG_PREBUILT_BIN
+          CLANG_PREBUILT_BIN=$(grep '^CLANG_PREBUILT_BIN=' ./common/build.config.common | cut -d'=' -f2 || true)
+          if [[ -z "$CLANG_PREBUILT_BIN" ]]; then
+            echo "⚠️ CLANG_PREBUILT_BIN 未在 build.config.common 中找到，回退至官方构建脚本"
+            echo "fallback=true" >> "$GITHUB_OUTPUT"
+            echo "请考虑关闭 FAST_BUILD 并提交问题"
+            exit 0
+          fi
+
+          # 优先尝试从 CLANG_PREBUILT_BIN 提取 clang-r 版本
+          if [[ "$CLANG_PREBUILT_BIN" =~ (clang-r[0-9a-z]+) ]]; then
+            CLANG_VERSION="${BASH_REMATCH[1]}"
+          else
+            # 如果未匹配到，尝试从 build.config.constants 提取
+            if [[ -f ./common/build.config.constants ]]; then
+              CLANG_VERSION=$(grep '^CLANG_VERSION=' ./common/build.config.constants | cut -d'=' -f2 || true)
+            fi
+          fi
+
+          if [[ -z "$CLANG_VERSION" ]]; then
+            echo "⚠️ 未能从 CLANG_PREBUILT_BIN 或 build.config.constants 获取到 Clang 版本，回退至官方构建脚本"
+            echo "fallback=true" >> "$GITHUB_OUTPUT"
+            echo "请考虑关闭 FAST_BUILD 并提交问题"
+            exit 0
+          fi
+
+          # 替换成新的 CLANG_VERSION 值
+          CLANG_PREBUILT_BIN=${CLANG_PREBUILT_BIN/\$\{CLANG_VERSION\}/$CLANG_VERSION}
+          # 获取 CLANG_PREBUILT_BIN 的第一个目录名，赋值给 CLANG_DIR
+          CLANG_DIR=$(echo "$CLANG_PREBUILT_BIN" | cut -d'/' -f1)
+          # 获取 CLANG_PREBUILT_BIN 的上一级目录名，赋值给 CLANG_PATH
+          CLANG_PATH=$(basename "$(dirname "$CLANG_PREBUILT_BIN")")
+
+          echo "✅ CLANG_VERSION=$CLANG_VERSION"
+          echo "✅ CLANG_DIR=$CLANG_DIR"
+          echo "✅ CLANG_PATH=$CLANG_PATH"
           echo "✅ USE_LLVM_IAS=$USE_LLVM_IAS"
 
-          # =========================================================
-          # 编译命令执行区
-          # =========================================================
-          
+          export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/$CLANG_PREBUILT_BIN:$PATH"
           export PATH="/usr/lib/ccache:$PATH"
           export CC="ccache clang"
-          export LD="/usr/bin/ld.lld"
-          
           sudo apt install -y libelf-dev ccache
 
           cd ./common
