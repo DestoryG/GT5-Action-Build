@@ -1,4 +1,6 @@
 name: Build SukiSU Ultra Realme GT5
+permissions:
+      contents: write
 run-name: >
   ${{
     github.event.inputs.FROM_UPDATE == 'true' &&
