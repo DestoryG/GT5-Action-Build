@@ -58,7 +58,7 @@ jobs:
             -X POST \
             /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra Realme GT5.yml"/dispatches \
             -f ref=${{ github.ref }} \
-            -f inputs[FILE]=realme_gt5_v
+            -f inputs[FILE]=realme_gt5_v \
             -f inputs[FROM_UPDATE]=true
 
           echo "Trigger build for realme UI 7"
@@ -66,5 +66,5 @@ jobs:
             -X POST \
             /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra Realme GT5.yml"/dispatches \
             -f ref=${{ github.ref }} \
-            -f inputs[FILE]=realme_gt5_b
+            -f inputs[FILE]=realme_gt5_b \
             -f inputs[FROM_UPDATE]=true
