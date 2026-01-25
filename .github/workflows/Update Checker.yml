@@ -53,14 +53,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ACTION_MANAGE_TOKEN }}
         run: |
-          echo "Trigger build for realme UI 6"
-          gh api \
-            -X POST \
-            /repos/${{ github.repository }}/actions/workflows/"Build SukiSU Ultra Realme GT5.yml"/dispatches \
-            -f ref=${{ github.ref }} \
-            -f inputs[FILE]=realme_gt5_v \
-            -f inputs[FROM_UPDATE]=true
-
           echo "Trigger build for realme UI 7"
           gh api \
             -X POST \
