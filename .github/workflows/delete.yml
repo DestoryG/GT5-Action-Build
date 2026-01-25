@@ -11,8 +11,7 @@ on:
         options:
           - Build SukiSU Ultra Realme GT5
           - CAll Build Start UP
-          - Build TEST
-          - Build TEST2
+          - Update Checker
       cache_mode:
         type: choice
         description: '缓存清理类型'
