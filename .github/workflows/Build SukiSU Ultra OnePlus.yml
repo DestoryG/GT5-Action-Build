@@ -376,7 +376,15 @@ jobs:
             fi
             rm -f "$dir/android/abi_gki_protected_exports_"* 2>/dev/null || echo "No protected exports in $dir"
           done
-
+      - name: Debug Check Clang Path
+        run: |
+               echo "=== 🔍 检查 XML 中定义的 Clang 路径 ==="
+               # 在下载下来的 manifest 里搜索 clang，看看实际生效的 path 是什么
+               grep -C 2 "clang" kernel_workspace/.repo/manifests/realme_gt5_b.xml || true
+               
+               echo "=== 📂 检查实际下载的文件结构 ==="
+               # 列出 linux-x86 目录下的所有文件夹，看看有没有 r450784e
+               ls -F kernel_workspace/kernel_platform/prebuilts/clang/host/linux-x86/ || echo "❌ 目录完全不存在"
       - name: Kernel Version Handling
         run: |
           cd kernel_workspace/kernel_platform
