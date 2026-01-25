@@ -4,7 +4,7 @@ run-name: >
     github.event.inputs.FROM_UPDATE == 'true' &&
     (
       github.event.inputs.FILE == 'realme_gt5_v' && 'Build For Realme UI 6' ||
-      github.event.inputs.FILE == 'realme_gt5_b' && 'Build For Realme UI 5'
+      github.event.inputs.FILE == 'realme_gt5_b' && 'Build For Realme UI 7'
     )
     ||
     'Build SukiSU Ultra Realme GT5'
