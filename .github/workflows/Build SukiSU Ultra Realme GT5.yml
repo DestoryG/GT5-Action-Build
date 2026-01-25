@@ -1251,7 +1251,7 @@ jobs:
 
       - name: Create AnyKernel3 zip For Release
         run: |
-          AK3ZIP_NAME="AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.file_clean.outputs.value }}.zip"
+          AK3ZIP_NAME="AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}.zip"
           cd AnyKernel3
           zip -r "../$AK3ZIP_NAME" ./*
           echo "AK3ZIP_NAME=$AK3ZIP_NAME" >> $GITHUB_ENV
@@ -1260,7 +1260,7 @@ jobs:
       - name: Create ZRAM Module zip For Release
         if: ${{ github.event.inputs.ZRAM == 'true' && steps.zram_find.outputs.upload != 'false' }}
         run: |
-          ZRAM_ZIP_NAME="ZRAM-Module_${{ env.KERNEL_VERSION }}_${{ steps.file_clean.outputs.value }}.zip"
+          ZRAM_ZIP_NAME="ZRAM-Module_${{ env.KERNEL_VERSION }}_${{ steps.extract_info.outputs.value }}.zip"
           cd ZRAM-Module
           zip -r "../$ZRAM_ZIP_NAME" ./*
           echo "ZRAM_ZIP_NAME=$ZRAM_ZIP_NAME" >> $GITHUB_ENV
