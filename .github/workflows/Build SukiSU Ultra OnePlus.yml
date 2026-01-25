@@ -57,7 +57,7 @@ on:
         type: string
         description: "分支名(必填)/自定义版本标识(留空不修改)/回退分支提交哈希版本(留空不修改)"
         required: false
-        default: "builtin/By-DestoryG/"
+        default: "builtin/DestoryG-Presents/"
       SUFFIX:
         type: string
         description: "自定义内核后缀(不输入使用随机字符串)"
@@ -1193,6 +1193,77 @@ jobs:
         with:
           name: ZRAM-Module_${{ env.KERNEL_VERSION }}_${{ steps.extract_info.outputs.value }}
           path: ZRAM-Module/*
+      - name: Get Latest Commit Hash from SukiSU-Ultra
+        id: get_commit_hash
+        run: |
+          COMMIT_HASH=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/commits/builtin | jq -r .sha)
+          SHORT_COMMIT_HASH=$(echo $COMMIT_HASH | cut -c 1-7)  # 截取前 7 位
+          echo "LATEST_COMMIT_HASH=$SHORT_COMMIT_HASH" >> $GITHUB_ENV
+
+      - name: Generate Tag
+        id: get_date_tag
+        run: |
+          TAG_NAME=$(date +"%Y.%m.%d-%H%M")
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}  # 使用正确的 tag 名称
+          name: "GT5 Kernel With SukiSU Ultra ${{ env.LATEST_COMMIT_HASH }}"
+          body: |
+            Build For realme GT5(RMX3820/RMX3823)
+            CPU: ${{ env.CPU }}
+            CPU代号: ${{ env.CPUD }}
+            安卓版本(看好了再刷！): ${{ env.ANDROID_VERSION }} (${{ env.ANDROID_VERSION == '16.0.0' && 'Realme UI 7.0' || env.ANDROID_VERSION == '15.0.0' && 'Realme UI 6.0' || '什么玩意？' }})
+            内核版本: ${{ env.TKERNEL_VERSION }}
+            内核类型: ${{ env.BUILD_METHOD }}
+            KPM实现类型: ${{ github.event.inputs.KPM }}
+            BBG防格机: ${{ github.event.inputs.LSM == 'true' && '✅️' || '❌' }}
+            快速构建: ${{ github.event.inputs.FAST_BUILD == 'true' && '✅️' || '❌' }}
+            更多ZRAM算法: ${{ github.event.inputs.ZRAM == 'true' && '✅️' || '❌'  }}
+            网络功能拓展(NETFILTER): ${{ github.event.inputs.NETFILTER == 'true' && '✅️' || '❌'  }}
+            网络优化算法(BBR_ECN): ${{ github.event.inputs.BBR_ECN == 'true' && '✅️' || '❌'  }}
+            风驰驱动(GT5不需要这个，请取消！): ${{ github.event.inputs.SCHED == 'true' && '✅️' || '❌'  }}
+            修复UNICODE漏洞: ${{ github.event.inputs.UNICODE_BYPASS == 'true' && '✅️' || '❌'  }}
+            阻止5US报错文件产生: ${{ github.event.inputs.XUS_FIX == 'true' && '✅️' || '❌'  }}
+            使用开发版SUSFS: ${{ github.event.inputs.SUSFS_DEV == 'true' && '✅️' || '❌'  }}
+            SukiSU Ultra管理器下载(AK3里应该有一个安装包): [SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra/releases)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create AnyKernel3 zip For Release
+        run: |
+          AK3ZIP_NAME="AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.file_clean.outputs.value }}.zip"
+          cd AnyKernel3
+          zip -r "../$AK3ZIP_NAME" ./*
+          echo "AK3ZIP_NAME=$AK3ZIP_NAME" >> $GITHUB_ENV
+
+
+      - name: Create ZRAM Module zip For Release
+        if: ${{ github.event.inputs.ZRAM == 'true' && steps.zram_find.outputs.upload != 'false' }}
+        run: |
+          ZRAM_ZIP_NAME="ZRAM-Module_${{ env.KERNEL_VERSION }}_${{ steps.file_clean.outputs.value }}.zip"
+          cd ZRAM-Module
+          zip -r "../$ZRAM_ZIP_NAME" ./*
+          echo "ZRAM_ZIP_NAME=$ZRAM_ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload AnyKernel3 to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.AK3ZIP_NAME }}  # 直接引用变量
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: "GT5 Kernel With SukiSU ${{ env.LATEST_COMMIT_HASH }}"
+
+      - name: Upload ZRAM Module to Release
+        if: ${{ github.event.inputs.ZRAM == 'true' && steps.zram_find.outputs.upload != 'false' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZRAM_ZIP_NAME }}  # 直接引用变量
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: "GT5 Kernel With SukiSU ${{ env.LATEST_COMMIT_HASH }}"
+          
 
       - name: Post-build Disk Check
         run: df -h
