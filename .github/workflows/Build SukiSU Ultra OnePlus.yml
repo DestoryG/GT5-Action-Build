@@ -218,40 +218,49 @@ jobs:
                   exit 1
                 fi
 
-                # 解析 revision 字符串
+                # 1. 尝试从 XML 解析 revision
                 REVISION=$(grep -oP '<project[^>]+revision="\K[^"]+' "$XML_PATH" | head -n1 || true)
-                echo "解析 FILE 获取 CPU 和 ANDROID_VERSION..."
-                echo "检测到的 REVISION 为: $REVISION"
+                echo "解析结果: REVISION=$REVISION"
 
-                # 尝试正常提取
+                # 2. 尝试正则提取 (针对标准格式)
                 CPU=$(echo "$REVISION" | sed -E 's#^(oneplus|realme|oppo)/([^_]+).*#\2#')
                 ANDROID_VERSION=$(echo "$REVISION" | grep -oP '\d{1,2}\.\d{1,2}(\.\d{1,2})?')
 
-                # === 补丁逻辑：如果提取失败，进行手动回退处理 ===
+                # === 补丁逻辑开始 (修复 master 分支无法识别问题) ===
                 if [[ -z "$ANDROID_VERSION" || "$REVISION" == "master" ]]; then
-                  echo "⚠️ 检测到 REVISION 为 master 或无法提取版本，使用手动匹配逻辑..."
+                  echo "⚠️ 检测到 REVISION 为 master 或无法提取版本，使用文件名 ($FILE) 进行手动匹配..."
                   
-                  # 针对 realme_gt5 的手动配置
+                  # --- CPU 设定 ---
+                  # GT5 对应的 CPU 代号是 sm8550 (骁龙8Gen2)
                   if [[ "$FILE" == *"realme_gt5"* ]]; then
-                    echo "检测到机型为 Realme GT5，手动指定参数。"
                     CPU="sm8550"
+                  fi
+
+                  # --- Android 版本设定 ---
+                  if [[ "$FILE" == "realme_gt5_v" ]]; then
+                    echo "✅ 匹配到 realme_gt5_v (Android 15)"
+                    ANDROID_VERSION="15.0.0"
+                  elif [[ "$FILE" == "realme_gt5_b" ]]; then
+                    echo "✅ 匹配到 realme_gt5_b (Android 16)"
                     ANDROID_VERSION="16.0.0"
                   else
-                    # 这里可以添加其他机型的判断，或者给一个默认值
-                    CPU="sm8550"     # 默认假设
-                    ANDROID_VERSION="16.0.0" # 默认假设
+                    # 这里的 else 是为了防止既不是 v 也不是 b 的情况，给个默认值防止报错
+                    # 你可以根据需要修改这个默认值，或者直接留空让后面报错
+                    echo "⚠️ 未匹配到特定版本后缀，尝试默认 Android 14"
+                    ANDROID_VERSION="14.0.0" 
                   fi
                 fi
                 # === 补丁逻辑结束 ===
 
+                # 3. 最终检查与变量导出
                 if [[ -n "$CPU" && -n "$ANDROID_VERSION" ]]; then
-                  echo "✅ CPU=$CPU, ANDROID_VERSION=$ANDROID_VERSION"
+                  echo "✅ 最终参数: CPU=$CPU, ANDROID_VERSION=$ANDROID_VERSION"
                   echo "CPU=$CPU" >> $GITHUB_ENV
                   echo "ANDROID_VERSION=$ANDROID_VERSION" >> $GITHUB_ENV
-                  # 获取短位 Android 版本号
+                  # 获取短位 Android 版本号 (例如 15.0.0 -> 15)
                   echo "ANDROID_SHORT_VERSION=${ANDROID_VERSION%%.*}" >> $GITHUB_ENV
                 else
-                  echo "❌ 无法从 revision 中提取 CPU 或 ANDROID_VERSION，且未命中手动规则。"
+                  echo "❌ 致命错误: 无法确定 CPU 或 ANDROID_VERSION。"
                   exit 1
                 fi
 
@@ -265,7 +274,14 @@ jobs:
                     echo "CPUD=$CPUD" >> $GITHUB_ENV
                     echo "BUILD_METHOD=$BUILD_METHOD" >> $GITHUB_ENV
                   else
-                    echo "❌ README.md 中未找到构建命令"
+                    echo "⚠️ README.md 中未找到构建命令，尝试根据 CPU 手动推断 CPUD"
+                    # 针对无法从 README 获取的情况进行补充
+                    if [[ "$CPU" == "sm8550" ]]; then
+                      echo "CPUD=kalama" >> $GITHUB_ENV
+                      echo "BUILD_METHOD=kalama" >> $GITHUB_ENV
+                    else 
+                      echo "❌ README内容缺失且无法推断 CPUD"
+                    fi
                   fi
                 else
                   echo "❌ README.md 下载失败或为空"
