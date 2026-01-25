@@ -975,7 +975,7 @@ jobs:
           export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/$CLANG_PREBUILT_BIN:$PATH"
           export PATH="/usr/lib/ccache:$PATH"
           export CC="ccache clang"
-          sudo apt install -y libelf-dev ccache
+          sudo apt install -y libelf-dev ccache lld
 
           cd ./common
           MAKE_ARGS="LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
