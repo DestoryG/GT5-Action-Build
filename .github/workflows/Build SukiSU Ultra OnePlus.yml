@@ -1211,7 +1211,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}  # 使用正确的 tag 名称
-          name: "GT5 Kernel With SukiSU Ultra ${{ env.LATEST_COMMIT_HASH }} For${{ env.ANDROID_VERSION == '16.0.0' && 'Realme UI 7.0' || env.ANDROID_VERSION == '15.0.0' && 'Realme UI 6.0' || 'WTF' }}"
+          name: "GT5 Kernel With SukiSU Ultra ${{ env.LATEST_COMMIT_HASH }} For ${{ env.ANDROID_VERSION == '16.0.0' && 'Realme UI 7.0' || env.ANDROID_VERSION == '15.0.0' && 'Realme UI 6.0' || 'WTF' }}"
           body: |
             Build For realme GT5(RMX3820/RMX3823)
             CPU: ${{ env.CPU }}
