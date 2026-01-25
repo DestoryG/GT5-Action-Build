@@ -1,4 +1,14 @@
-name: Build OnePlus_SukiSU Ultra All
+name: Build SukiSU Ultra Realme GT5
+run-name: >
+  ${{
+    github.event.inputs.FROM_UPDATE == 'true' &&
+    (
+      github.event.inputs.FILE == 'realme_gt5_v' && 'Build For Realme UI 6' ||
+      github.event.inputs.FILE == 'realme_gt5_b' && 'Build For Realme UI 5'
+    )
+    ||
+    'Build SukiSU Ultra OnePlus'
+  }}
 on:
   workflow_dispatch:
     inputs:
@@ -67,6 +77,10 @@ on:
         description: "自定义内核等级欺骗(SUBLEVEL)"
         required: false
         default: ""
+      FROM_UPDATE:
+        description: "是否在run-name里显示Realme UI版本？"
+        required: false
+        default: "false"
       FAST_BUILD:
         type: boolean
         description: "是否启用极速构建？"
