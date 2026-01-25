@@ -10,6 +10,7 @@ on:
         options:
           - realme_gt5_v
           - realme_gt5_b
+          - oneplus_ace2_pro_b
       MANAGER_SOURCE:
         type: choice
         description: "管理器调用方向"
