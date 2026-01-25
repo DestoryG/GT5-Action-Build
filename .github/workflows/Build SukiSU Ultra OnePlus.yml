@@ -147,10 +147,10 @@ jobs:
           remove-codeql: 'true'
 
       - name: Extract Manifest Info
-              id: extract_info
-              env:
-                FILE: ${{ github.event.inputs.FILE }}
-              run: |
+        id: extract_info
+        env:
+          FILE: ${{ github.event.inputs.FILE }}
+        run: |
                 set -e
                 cd "$GITHUB_WORKSPACE"
                 if [[ "$FILE" =~ ^(.+)_([a-zA-Z])$ ]]; then
