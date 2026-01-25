@@ -149,21 +149,27 @@ jobs:
       - name: Extract Manifest Info
         id: extract_info
         env:
-          FILE: ${{ github.event.inputs.FILE }}
+                FILE: ${{ github.event.inputs.FILE }}
         run: |
+                # 开启调试模式，日志会显示每一行执行情况
                 set -e
+                set -x
+                
                 cd "$GITHUB_WORKSPACE"
+                
+                # === 1. 文件名预处理 ===
                 if [[ "$FILE" =~ ^(.+)_([a-zA-Z])$ ]]; then
                   FILE_CONF="${BASH_REMATCH[1]}"
                 else
                   FILE_CONF="$FILE"
                 fi
                 FILE_BASE=$(echo "$FILE_CONF" | sed -E 's/_([a-zA-Z0-9])/\U\1/g; s/^oneplus/OnePlus/; s/^realme/Realme/; s/^oppo/Oppo/')
+                
                 mkdir -p ".repo/manifests_fallback"
                 XML_PATH=".repo/manifests_fallback/${FILE}.xml"
                 README_PATH=".repo/manifests_fallback/README.md"
                 
-                # 动态调用源码清单仓库，仓库优先级：1️⃣ OnePlusOSS → 2️⃣ Numbersf(可换)
+                # === 2. 定义仓库源 ===
                 DYNAMIC_REPO_INPUT="${{ github.event.inputs.DYNAMIC_REPO }}"
                 declare -A REPOS
                 REPOS["OnePlusOSS"]="https://api.github.com/repos/OnePlusOSS/kernel_manifest"
@@ -172,23 +178,29 @@ jobs:
                 FOUND_REPO=""
                 FOUND_BRANCH=""
 
+                # 定义下载函数
                 check_repo() {
                   local OWNER=$1
                   local REPO_URL=$2
 
-                  echo "🌐 尝试拉取 ${OWNER} 分支列表..."
+                  echo "🌐 正在检查仓库: ${OWNER} ..."
                   BRANCHES=$(curl -fsL ${REPO_URL}/branches | jq -r 'if type=="array" then .[].name else empty end' 2>/dev/null || true)
+                  
                   if [[ -z "$BRANCHES" ]]; then
-                    echo "⚠️ ${OWNER} 分支列表获取失败，请尝试重新运行工作流。"
+                    echo "⚠️ ${OWNER} 分支列表为空或获取失败 (API限制或网络问题)"
                     return 1
                   fi
+                  
                   for BRANCH in $BRANCHES; do
                     XML_URL="https://raw.githubusercontent.com/${OWNER}/kernel_manifest/$BRANCH/${FILE}.xml"
                     README_URL="https://raw.githubusercontent.com/${OWNER}/kernel_manifest/$BRANCH/README.md"
+                    
+                    # 只检测头信息，速度更快
                     if curl -sf --head "$XML_URL" > /dev/null; then
-                      echo "✅ 在 ${OWNER} 找到 ${FILE}.xml (分支: $BRANCH)"
+                      echo "✅ 找到文件: ${FILE}.xml (仓库: $OWNER, 分支: $BRANCH)"
+                      # 实际下载
                       curl -s -o "$XML_PATH" "$XML_URL"
-                      curl -s -o "$README_PATH" "$README_URL" || true
+                      curl -s -o "$README_PATH" "$README_URL" || echo "⚠️ README下载失败，但不影响核心流程"
                       FOUND_REPO="$OWNER"
                       FOUND_BRANCH="$BRANCH"
                       return 0
@@ -197,15 +209,17 @@ jobs:
                   return 1
                 }
 
-                # 默认仓库寻找文件
+                # === 3. 执行下载流程 ===
+                # 优先检查 OnePlusOSS
                 if check_repo "OnePlusOSS" "${REPOS["OnePlusOSS"]}"; then
                   echo "MANIFEST_REPO=OnePlusOSS" >> $GITHUB_ENV
                   echo "MANIFEST_BRANCH=$FOUND_BRANCH" >> $GITHUB_ENV
                 fi
 
-                # 动态仓库寻找文件
+                # 如果没找到，检查动态仓库
                 if [[ -z "$FOUND_REPO" ]]; then
                   DYNAMIC_URL="${REPOS["Dynamic"]}"
+                  # 提取 Owner 名称
                   DYNAMIC_OWNER=$(echo "$DYNAMIC_URL" | sed -E 's#https://api.github.com/repos/([^/]+)/.*#\1#')
                   if check_repo "$DYNAMIC_OWNER" "$DYNAMIC_URL"; then
                     echo "MANIFEST_REPO=$DYNAMIC_OWNER" >> $GITHUB_ENV
@@ -213,80 +227,82 @@ jobs:
                   fi
                 fi
 
+                # === 4. 致命错误检查 ===
+                # 如果这里报错，说明 XML 文件根本没下载下来
                 if [[ -z "$FOUND_REPO" || ! -s "$XML_PATH" ]]; then
-                  echo "❌ 无法在动态仓库中找到 ${FILE}.xml"
+                  echo "❌ 错误: 在所有仓库中均未找到 ${FILE}.xml"
+                  echo "请检查文件名是否正确，或者文件是否已上传到 Github。"
                   exit 1
                 fi
 
-                # 1. 尝试从 XML 解析 revision
+                # === 5. 解析内容与补丁逻辑 ===
+                # 尝试从文件获取
                 REVISION=$(grep -oP '<project[^>]+revision="\K[^"]+' "$XML_PATH" | head -n1 || true)
-                echo "解析结果: REVISION=$REVISION"
+                echo "原始 REVISION: $REVISION"
 
-                # 2. 尝试正则提取 (针对标准格式)
                 CPU=$(echo "$REVISION" | sed -E 's#^(oneplus|realme|oppo)/([^_]+).*#\2#')
                 ANDROID_VERSION=$(echo "$REVISION" | grep -oP '\d{1,2}\.\d{1,2}(\.\d{1,2})?')
 
-                # === 补丁逻辑开始 (修复 master 分支无法识别问题) ===
+                # >>>>>> 你的补丁逻辑 (已优化) <<<<<<
                 if [[ -z "$ANDROID_VERSION" || "$REVISION" == "master" ]]; then
-                  echo "⚠️ 检测到 REVISION 为 master 或无法提取版本，使用文件名 ($FILE) 进行手动匹配..."
+                  echo "⚠️ 无法自动识别版本，启动手动匹配模式 (File: $FILE)..."
                   
-                  # --- CPU 设定 ---
-                  # GT5 对应的 CPU 代号是 sm8550 (骁龙8Gen2)
+                  # 设定 CPU
                   if [[ "$FILE" == *"realme_gt5"* ]]; then
                     CPU="sm8550"
                   fi
 
-                  # --- Android 版本设定 ---
+                  # 设定 Android 版本
                   if [[ "$FILE" == "realme_gt5_v" ]]; then
-                    echo "✅ 匹配到 realme_gt5_v (Android 15)"
+                    echo "✅ 识别为: Realme GT5 (Android 15)"
                     ANDROID_VERSION="15.0.0"
                   elif [[ "$FILE" == "realme_gt5_b" ]]; then
-                    echo "✅ 匹配到 realme_gt5_b (Android 16)"
+                    echo "✅ 识别为: Realme GT5 (Android 16)"
                     ANDROID_VERSION="16.0.0"
                   else
-                    # 这里的 else 是为了防止既不是 v 也不是 b 的情况，给个默认值防止报错
-                    # 你可以根据需要修改这个默认值，或者直接留空让后面报错
-                    echo "⚠️ 未匹配到特定版本后缀，尝试默认 Android 14"
-                    ANDROID_VERSION="14.0.0" 
+                    echo "⚠️ 未匹配到后缀，使用默认值 Android 14"
+                    ANDROID_VERSION="14.0.0"
                   fi
                 fi
-                # === 补丁逻辑结束 ===
+                # >>>>>> 补丁逻辑结束 <<<<<<
 
-                # 3. 最终检查与变量导出
+                # === 6. 最终参数导出 ===
                 if [[ -n "$CPU" && -n "$ANDROID_VERSION" ]]; then
-                  echo "✅ 最终参数: CPU=$CPU, ANDROID_VERSION=$ANDROID_VERSION"
+                  echo "✅ 锁定参数: CPU=$CPU, Version=$ANDROID_VERSION"
                   echo "CPU=$CPU" >> $GITHUB_ENV
                   echo "ANDROID_VERSION=$ANDROID_VERSION" >> $GITHUB_ENV
-                  # 获取短位 Android 版本号 (例如 15.0.0 -> 15)
                   echo "ANDROID_SHORT_VERSION=${ANDROID_VERSION%%.*}" >> $GITHUB_ENV
                 else
                   echo "❌ 致命错误: 无法确定 CPU 或 ANDROID_VERSION。"
                   exit 1
                 fi
 
-                echo "解析 README.md 获取 CPUD 和 BUILD_METHOD..."
+                # === 7. 解析构建命令 (README) ===
+                echo "解析 README 获取构建参数..."
+                BUILD_LINE=""
                 if [[ -s "$README_PATH" ]]; then
                   BUILD_LINE=$(grep -m1 'oplus_build_kernel.sh' "$README_PATH" || true)
-                  if [[ -n "$BUILD_LINE" ]]; then
-                    CPUD=$(echo "$BUILD_LINE" | awk '{print $(NF-1)}')
-                    BUILD_METHOD=$(echo "$BUILD_LINE" | awk '{print $NF}')
-                    echo "✅ CPUD=$CPUD, BUILD_METHOD=$BUILD_METHOD"
-                    echo "CPUD=$CPUD" >> $GITHUB_ENV
-                    echo "BUILD_METHOD=$BUILD_METHOD" >> $GITHUB_ENV
-                  else
-                    echo "⚠️ README.md 中未找到构建命令，尝试根据 CPU 手动推断 CPUD"
-                    # 针对无法从 README 获取的情况进行补充
-                    if [[ "$CPU" == "sm8550" ]]; then
-                      echo "CPUD=kalama" >> $GITHUB_ENV
-                      echo "BUILD_METHOD=kalama" >> $GITHUB_ENV
-                    else 
-                      echo "❌ README内容缺失且无法推断 CPUD"
-                    fi
-                  fi
-                else
-                  echo "❌ README.md 下载失败或为空"
                 fi
-                # 传递组合信息
+
+                if [[ -n "$BUILD_LINE" ]]; then
+                  CPUD=$(echo "$BUILD_LINE" | awk '{print $(NF-1)}')
+                  BUILD_METHOD=$(echo "$BUILD_LINE" | awk '{print $NF}')
+                  echo "✅ 从 README 获取: CPUD=$CPUD, METHOD=$BUILD_METHOD"
+                  echo "CPUD=$CPUD" >> $GITHUB_ENV
+                  echo "BUILD_METHOD=$BUILD_METHOD" >> $GITHUB_ENV
+                else
+                  echo "⚠️ README 不包含构建命令，尝试手动推断..."
+                  if [[ "$CPU" == "sm8550" ]]; then
+                    echo "✅ 手动推断: CPUD=kalama"
+                    echo "CPUD=kalama" >> $GITHUB_ENV
+                    echo "BUILD_METHOD=kalama" >> $GITHUB_ENV
+                  else
+                    # 注意：这里我们只警告，不退出，防止因为没有 README 导致构建中断
+                    echo "⚠️ 警告: 无法获取 CPUD，后续步骤可能会失败"
+                  fi
+                fi
+
+                # 输出到 Output
                 echo "value=${FILE_BASE}_Android${ANDROID_VERSION}" >> "$GITHUB_OUTPUT"
                 
       - name: Debug Show Selected Inputs
