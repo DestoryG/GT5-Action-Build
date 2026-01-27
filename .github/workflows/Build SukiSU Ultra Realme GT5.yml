@@ -80,9 +80,10 @@ on:
         required: false
         default: ""
       FROM_UPDATE:
+        type: boolean
         description: "是否在run-name里显示Realme UI版本？"
         required: false
-        default: "false"
+        default: false
       FAST_BUILD:
         type: boolean
         description: "是否启用极速构建？"
