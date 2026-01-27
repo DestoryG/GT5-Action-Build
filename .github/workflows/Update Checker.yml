@@ -11,7 +11,7 @@ env:
 on:
   workflow_dispatch:
   schedule:
-    - cron: 0 0 * * *   # 每天 00:00 UTC 检查
+    - cron: '0 0 * * *'   # 每天 00:00 UTC 检查
 
 jobs:
   check:
