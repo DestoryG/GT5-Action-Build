@@ -89,7 +89,7 @@ on:
         description: "是否启用极速构建？"
         required: true
         default: true
-      LSM:
+      LSM_BBG:
         type: boolean
         description: "是否启用关键分区写入保护模块(BBG)？"
         required: true
@@ -905,7 +905,7 @@ jobs:
           fi
 
           # ZRAM配置*
-          if [[ "${{ github.event.inputs.ZRAM }}" == 1* ]]; then
+          if [["${{ github.event.inputs.ZRAM }}" =~ ^1/]]; then
             echo "CONFIG_CRYPTO_LZ4HC=y" >> "$CONFIG_FILE"
             echo "CONFIG_CRYPTO_LZ4K=y" >> "$CONFIG_FILE"
             echo "CONFIG_CRYPTO_LZ4KD=y" >> "$CONFIG_FILE"
@@ -1245,7 +1245,7 @@ jobs:
       - name: Set zip Suffix
         id: suffix
         run: |
-          echo "value=${{ github.event.inputs.ZRAM == 'true' && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'KPM' && '_KPM' || github.event.inputs.KPM == 'KPN' && '_KPN' || '' }}${{ github.event.inputs.LSM == 'true' && '_LSM' || '' }}_ILH${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
+          echo "value=${{ startsWith(github.event.inputs.ZRAM, '1/') && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'KPM' && '_KPM' || github.event.inputs.KPM == 'KPN' && '_KPN' || '' }}${{ github.event.inputs.LSM == 'true' && '_LSM' || '' }}_ILH${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
 
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
@@ -1254,7 +1254,7 @@ jobs:
           path: ./AnyKernel3/*
 
       - name: Download and Unzip ZRAM
-        if: ${{ github.event.inputs.ZRAM == 'true' }}
+        if: ${{ startsWith(github.event.inputs.ZRAM, '1/') }}
         id: zram_find
         run: |
           set -e
@@ -1380,7 +1380,7 @@ jobs:
           release_name: "GT5 Kernel With SukiSU ${{ env.LATEST_COMMIT_HASH }}"
 
       - name: Upload ZRAM Module to Release
-        if: ${{ github.event.inputs.ZRAM == 'true' && steps.zram_find.outputs.upload != 'false' }}
+        if: ${{ startsWith(github.event.inputs.ZRAM, '1/') && steps.zram_find.outputs.upload != 'false' }}
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.ZRAM_ZIP_NAME }}  # 直接引用变量
