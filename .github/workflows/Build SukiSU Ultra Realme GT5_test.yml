@@ -1365,7 +1365,7 @@ jobs:
 
 
       - name: Create ZRAM Module zip For Release
-        if: ${{ github.event.inputs.ZRAM == 'true' && steps.zram_find.outputs.upload != 'false' }}
+        if: ${{ startsWith(github.event.inputs.ZRAM, '1/') && steps.zram_find.outputs.upload != 'false' }}
         run: |
           ZRAM_ZIP_NAME="ZRAM-Module_${{ env.KERNEL_VERSION }}_${{ steps.extract_info.outputs.value }}.zip"
           cd ZRAM-Module
