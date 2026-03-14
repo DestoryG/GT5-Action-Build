@@ -894,6 +894,8 @@ jobs:
           if [ "${{ github.event.inputs.CCM }}" = "true" ]; then
             echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_BBR=y" >> "$CONFIG_FILE"
+            sed -i '/CONFIG_DEFAULT_TCP_CONG/d' "$CONFIG_FILE"
+            echo 'CONFIG_DEFAULT_TCP_CONG="bbr"' >> "$CONFIG_FILE"
             echo "CONFIG_NET_SCH_FQ=y" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_WESTWOOD=n" >> "$CONFIG_FILE"
