@@ -152,18 +152,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Maximize Build Space
-        if: ${{ github.event.inputs.SPACE_NOCLEAN == 'false' }}
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 8192
-          temp-reserve-mb: 2048
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-
+        
+      - name: Cleanup Workspace
+        run: |
+          sudo rm -rf kernel_workspace AnyKernel3 ZRAM-Module
+          
       - name: Extract Manifest Info
         id: extract_info
         env:
