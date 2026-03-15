@@ -143,7 +143,7 @@ on:
 jobs:
   build:
     name: ${{ github.event.inputs.FAST_BUILD == 'true' && ' [FAST]' || '' }}${{ contains(github.event.inputs.FILE, '_aosp') && ' [AOSP]' || '' }}${{ github.event.inputs.KPM == 'KPM' && ' [KPM]' || github.event.inputs.KPM == 'KPN' && ' [KPN]' || '' }}${{ github.event.inputs.LSM_BBG == 'true' && ' [BBG]' || '' }}${{ github.event.inputs.SCHED_HMBIRD == 'true' && ' [HMBIRD]' || '' }}${{ startsWith(github.event.inputs.ZRAM, '1/') && ' [ZRAM]' || '' }}For ${{ github.event.inputs.FILE }} ${{ github.event.inputs.SUFFIX }}
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
@@ -1152,6 +1152,25 @@ jobs:
             cp "$image_path" ./AnyKernel3/Image
             cp "$image_path" kernel_workspace/kernel_platform/out/Final-Image-Find/Image
           fi
+      - name: Package Kernel Headers for Local Dev
+        run: |
+          cd kernel_workspace/kernel_platform
+          echo "打包内核编译环境用于本地模块开发..."
+          
+          # 避免打包几十个G的中间产物，排除 .o, .a, .cmd, .ko, .git, vmlinux 等文件
+          # 兼容 make O=out 和 官方脚本的 out 路径
+          tar --exclude='*.o' --exclude='*.a' --exclude='*.cmd' --exclude='*.ko' \
+              --exclude='vmlinux*' --exclude='*.git' --exclude='*.mod' \
+              -czvf module_headers.tar.gz common/ out/ 2>/dev/null || true
+          
+          echo "打包完成，文件大小："
+          ls -lh module_headers.tar.gz
+
+      - name: Upload Headers Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-dev-headers_${{ env.KERNEL_VERSION }}_${{ steps.extract_info.outputs.value }}
+          path: kernel_workspace/kernel_platform/module_headers.tar.gz
 
       - name: Apply patch_linux and Replace Image
         if: ${{ github.event.inputs.KPM == 'KPM' }}
