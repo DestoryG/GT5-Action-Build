@@ -1,12 +1,12 @@
-name: Build SukiSU Ultra Realme GT5
+name: Build SukiSU Ultra Realme GT5 (Test)
 permissions:
       contents: write
 run-name: >
   ${{
     github.event.inputs.FROM_UPDATE == 'true' &&
     (
-      github.event.inputs.FILE == 'realme_gt5_v' && 'Build For Realme UI 6' ||
-      github.event.inputs.FILE == 'realme_gt5_b' && 'Build For Realme UI 7'
+      github.event.inputs.FILE == 'realme_gt5_v' && 'Build For Realme UI 6(test)' ||
+      github.event.inputs.FILE == 'realme_gt5_b' && 'Build For Realme UI 7(test)'
     )
     ||
     'Build SukiSU Ultra Realme GT5'
