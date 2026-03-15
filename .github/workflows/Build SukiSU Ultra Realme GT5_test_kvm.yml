@@ -390,6 +390,24 @@ jobs:
             fi
             rm -f "$dir/android/abi_gki_protected_exports_"* 2>/dev/null || echo "No protected exports in $dir"
           done
+      - name: 🧬 篡改 OEM_VM 权限基因
+        run: |
+          # 定义文件路径 (根据你之前的搜索结果)
+          DTS_FILE="kernel_workspace/kernel_platform/qcom/proprietary/devicetree/qcom/kalama-oemvm.dtsi"
+          
+          if [ -f "$DTS_FILE" ]; then
+            echo "✅ 找到目标设备树文件，正在注入控制权..."
+            
+            # 使用 sed 在 image-name 行后强行插入 Owner 权限和自动启动标志
+            # 3 代表 Android 的 VMID，这会让 Android 拥有该 VM 的绝对控制权
+            sed -i '/image-name = "qcom,oemvm";/a \		qcom,owner-vmid = <3>;\n\		qcom,autostart;' "$DTS_FILE"
+            
+            echo "🔥 注入完成，查看修改后的节点内容："
+            grep -A 10 "qcom,oemvm" "$DTS_FILE"
+          else
+            echo "❌ 未找到 $DTS_FILE，请检查路径是否正确"
+            exit 1
+          fi
       - name: Kernel Version Handling
         run: |
           cd kernel_workspace/kernel_platform
