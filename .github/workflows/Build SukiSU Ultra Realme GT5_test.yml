@@ -892,18 +892,23 @@ jobs:
 
           # BBR & ECN配置*
           if [ "${{ github.event.inputs.CCM }}" = "true" ]; then
+            # 1. 先精准删除原有的默认拥塞算法和队列调度器（防冲突）
+            sed -i '/CONFIG_DEFAULT_CUBIC=y/d' "$CONFIG_FILE"
+            sed -i '/CONFIG_DEFAULT_PFIFO_FAST=y/d' "$CONFIG_FILE"
+
+            # 2. 写入 BBR 为默认拥塞算法
             echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_BBR=y" >> "$CONFIG_FILE"
             echo "CONFIG_DEFAULT_BBR=y" >> "$CONFIG_FILE"
             echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> "$CONFIG_FILE"
             
-            # FQ 队列调度及其默认开关
+            # 3. 写入 FQ 为默认队列调度器
             echo "CONFIG_NET_SCH_FQ=y" >> "$CONFIG_FILE"
             echo "CONFIG_NET_SCH_DEFAULT=y" >> "$CONFIG_FILE"
-            echo "CONFIG_DEFAULT_FQ=y" >> "$CONFIG_FILE" # <-- 真正决定选中 FQ 的核心开关
-            echo "# CONFIG_DEFAULT_PFIFO_FAST is not set" >> "$CONFIG_FILE" # <-- 显式扒掉原本的默认项
+            echo "CONFIG_DEFAULT_FQ=y" >> "$CONFIG_FILE"
             echo "CONFIG_DEFAULT_NET_SCH=\"fq\"" >> "$CONFIG_FILE" 
             
+            # 4. 其它网络优化选项
             echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_WESTWOOD=n" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_HTCP=n" >> "$CONFIG_FILE"
