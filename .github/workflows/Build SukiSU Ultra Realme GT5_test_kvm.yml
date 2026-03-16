@@ -1180,19 +1180,26 @@ jobs:
             cp "$image_path" ./AnyKernel3/Image
             cp "$image_path" kernel_workspace/kernel_platform/out/Final-Image-Find/Image
           fi
-      - name: Package Kernel Headers for Local Dev
+       - name: Package Kernel Headers & DTB for Local Dev
         run: |
           cd kernel_workspace/kernel_platform
-          echo "打包内核编译环境用于本地模块开发..."
+          echo "✅ 开始搜刮设备树产物并打包本地开发环境..."
           
+          # 1. 专门建一个目录，把全盘编译出来的 dtb 和 dtbo 全捞过来！
+          mkdir -p dtb_collected
+          echo "🔍 正在全盘强行提取 .dtb 和 dtbo.img..."
+          find . -type f -name "*.dtb" -exec cp {} dtb_collected/ \; 2>/dev/null || true
+          find . -type f -name "dtbo.img" -exec cp {} dtb_collected/ \; 2>/dev/null || true
+          find . -type f -name "dtb.img" -exec cp {} dtb_collected/ \; 2>/dev/null || true
+          
+          echo "📦 成功捞到的设备树文件："
+          ls -lh dtb_collected/
+          
+          # 2. 将这个装满 dtb 的文件夹一起塞进你的 tar 包里
           # 避免打包几十个G的中间产物，排除 .o, .a, .cmd, .ko, .git, vmlinux 等文件
-          # 兼容 make O=out 和 官方脚本的 out 路径
           tar --exclude='*.o' --exclude='*.a' --exclude='*.cmd' --exclude='*.ko' \
               --exclude='vmlinux*' --exclude='*.git' --exclude='*.mod' \
-              -czvf module_headers.tar.gz common/ out/ 2>/dev/null || true
-          
-          echo "打包完成，文件大小："
-          ls -lh module_headers.tar.gz
+              -czvf module_headers.tar.gz common/ out/ dtb_collected/ 2>/dev/null || true
 
       - name: Upload Headers Artifact
         uses: actions/upload-artifact@v4
