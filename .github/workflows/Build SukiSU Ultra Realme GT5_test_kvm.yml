@@ -1294,6 +1294,50 @@ jobs:
         run: |
           echo "value=${{ startsWith(github.event.inputs.ZRAM, '1/') && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'KPM' && '_KPM' || github.event.inputs.KPM == 'KPN' && '_KPN' || '' }}${{ github.event.inputs.LSM == 'true' && '_LSM' || '' }}_ILH${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
 
+      - name: 📦 装载真实 DTBO 并强制配置 AnyKernel3
+        run: |
+          echo "✅ 准备将篡改好的设备树文件装载到 AK3 中..."
+          
+          # 1. 查找真正的 dtbo.img
+          # 我们在 kernel_workspace 下找体积大于 1MB 的，避开那些几KB的测试垃圾
+          REAL_DTBO=$(find kernel_workspace/kernel_platform/ -type f -name "dtbo.img" -size +1M | head -n 1)
+          if [ -n "$REAL_DTBO" ]; then
+            echo "🎯 找到并装载真实 dtbo.img: $REAL_DTBO"
+            cp "$REAL_DTBO" ./AnyKernel3/dtbo.img
+          else
+            echo "⚠️ 未找到大于 1MB 的 dtbo.img，退阶查找任意 dtbo.img..."
+            REAL_DTBO=$(find kernel_workspace/kernel_platform/ -type f -name "dtbo.img" | head -n 1)
+            [ -n "$REAL_DTBO" ] && cp "$REAL_DTBO" ./AnyKernel3/dtbo.img
+          fi
+          
+          # 2. 查找真正的 dtb (如果有的话，顺便带上)
+          REAL_DTB=$(find kernel_workspace/kernel_platform/ -type f \( -name "dtb.img" -o -name "dtb" \) | grep -v "apq" | grep -v "sdm" | head -n 1)
+          if [ -n "$REAL_DTB" ]; then
+            echo "🎯 找到并装载真实 dtb: $REAL_DTB"
+            cp "$REAL_DTB" ./AnyKernel3/dtb
+          fi
+          
+          # 3. 强制魔改 anykernel.sh，下达刷入指令
+          AK3_SH="./AnyKernel3/anykernel.sh"
+          if [ -f "$AK3_SH" ]; then
+            echo "🔧 正在修改 anykernel.sh 刷机配置..."
+            
+            # 将默认的关闭(0)替换为开启(1)
+            sed -i 's/flash_dtbo=0/flash_dtbo=1/g' "$AK3_SH" || true
+            sed -i 's/flash_dtb=0/flash_dtb=1/g' "$AK3_SH" || true
+            
+            # 暴力兜底：如果脚本里根本没写这两个变量，强行在末尾追加
+            grep -q "flash_dtbo=" "$AK3_SH" || echo "flash_dtbo=1" >> "$AK3_SH"
+            grep -q "flash_dtb=" "$AK3_SH" || echo "flash_dtb=1" >> "$AK3_SH"
+            
+            echo "✅ AK3 设备树强刷开关已激活！"
+          else
+            echo "❌ 警告：未找到 anykernel.sh 文件，这很不正常！"
+          fi
+          
+          echo "📦 最终 AK3 目录产物确认："
+          ls -lh ./AnyKernel3/
+          
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
