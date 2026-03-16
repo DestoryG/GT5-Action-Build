@@ -1,12 +1,12 @@
-name: Build SukiSU Ultra Realme GT5 (Test)
+name: Build SukiSU Ultra Realme GT5
 permissions:
       contents: write
 run-name: >
   ${{
     github.event.inputs.FROM_UPDATE == 'true' &&
     (
-      github.event.inputs.FILE == 'realme_gt5_v' && 'Build For Realme UI 6(test)' ||
-      github.event.inputs.FILE == 'realme_gt5_b' && 'Build For Realme UI 7(test)'
+      github.event.inputs.FILE == 'realme_gt5_v' && 'Build For Realme UI 6' ||
+      github.event.inputs.FILE == 'realme_gt5_b' && 'Build For Realme UI 7'
     )
     ||
     'Build SukiSU Ultra Realme GT5'
@@ -152,11 +152,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
-      - name: Cleanup Workspace
-        run: |
-          sudo rm -rf kernel_workspace AnyKernel3 ZRAM-Module
-          
+
+      - name: Maximize Build Space
+        if: ${{ github.event.inputs.SPACE_NOCLEAN == 'false' }}
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 2048
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
       - name: Extract Manifest Info
         id: extract_info
         env:
@@ -390,34 +397,6 @@ jobs:
             fi
             rm -f "$dir/android/abi_gki_protected_exports_"* 2>/dev/null || echo "No protected exports in $dir"
           done
-      - name: 🧬 终极暴力注入 (全盘覆盖 Oplus/Realme 私有设备树)
-        run: |
-          echo "✅ 开始地毯式轰炸所有设备树文件..."
-          
-          # 加上 || true 防止 grep 找不到内容时触发 set -e 直接退出
-          # 搜索范围扩大到当前工作区的所有目录 (.)
-          TARGET_FILES=$(find . -type f \( -name "*.dts" -o -name "*.dtsi" \) -exec grep -l 'image-name = "qcom,oemvm"' {} + || true)
-          
-          if [ -z "$TARGET_FILES" ]; then
-            echo "❌ 没找到任何包含 qcom,oemvm 的文件！我们可能被 Oplus 私有代码仓库绕过了！"
-            exit 1
-          fi
-          
-          for file in $TARGET_FILES; do
-            echo "🎯 锁定并篡改目标: $file"
-            
-            # 1. 强制赋予 Android (VMID 3) 的所有权 (使用 s 替换法，避免 YAML 换行转义错误)
-            sed -i 's/image-name = "qcom,oemvm";/image-name = "qcom,oemvm";\n\t\tqcom,owner-vmid = <3>;/g' "$file"
-            
-            # 2. 将崩溃致命级别降低
-            sed -i 's/vm-attrs = "crash-fatal";/vm-attrs = "non-fatal";/g' "$file"
-            
-            # 3. 抹除 pasid 签名校验配置
-            sed -i '/qcom,pasid/d' "$file"
-          done
-          
-          echo "🔥 轰炸结果确认："
-          grep -rn "qcom,owner-vmid = <3>;" . --include="*.dts" --include="*.dtsi" || true
       - name: Kernel Version Handling
         run: |
           cd kernel_workspace/kernel_platform
@@ -915,7 +894,10 @@ jobs:
           if [ "${{ github.event.inputs.CCM }}" = "true" ]; then
             echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_BBR=y" >> "$CONFIG_FILE"
+            echo "CONFIG_DEFAULT_BBR=y" >> "$CONFIG_FILE" # 将 BBR 设为默认
+            echo "CONFIG_DEFAULT_TCP_CONG=\"bbr\"" >> "$CONFIG_FILE" # 声明默认拥塞控制算法字符串
             echo "CONFIG_NET_SCH_FQ=y" >> "$CONFIG_FILE"
+            echo "CONFIG_DEFAULT_NET_SCH=\"fq\"" >> "$CONFIG_FILE" # BBR 需要配合 fq 队列调度
             echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_WESTWOOD=n" >> "$CONFIG_FILE"
             echo "CONFIG_TCP_CONG_HTCP=n" >> "$CONFIG_FILE"
@@ -1180,32 +1162,6 @@ jobs:
             cp "$image_path" ./AnyKernel3/Image
             cp "$image_path" kernel_workspace/kernel_platform/out/Final-Image-Find/Image
           fi
-      - name: Package Kernel Headers & DTB for Local Dev
-        run: |
-          cd kernel_workspace/kernel_platform
-          echo "✅ 开始搜刮设备树产物并打包本地开发环境..."
-          
-          # 1. 专门建一个目录，把全盘编译出来的 dtb 和 dtbo 全捞过来！
-          mkdir -p dtb_collected
-          echo "🔍 正在全盘强行提取 .dtb 和 dtbo.img..."
-          find . -type f -name "*.dtb" -exec cp {} dtb_collected/ \; 2>/dev/null || true
-          find . -type f -name "dtbo.img" -exec cp {} dtb_collected/ \; 2>/dev/null || true
-          find . -type f -name "dtb.img" -exec cp {} dtb_collected/ \; 2>/dev/null || true
-          
-          echo "📦 成功捞到的设备树文件："
-          ls -lh dtb_collected/
-          
-          # 2. 将这个装满 dtb 的文件夹一起塞进你的 tar 包里
-          # 避免打包几十个G的中间产物，排除 .o, .a, .cmd, .ko, .git, vmlinux 等文件
-          tar --exclude='*.o' --exclude='*.a' --exclude='*.cmd' --exclude='*.ko' \
-              --exclude='vmlinux*' --exclude='*.git' --exclude='*.mod' \
-              -czvf module_headers.tar.gz common/ out/ dtb_collected/ 2>/dev/null || true
-
-      - name: Upload Headers Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: local-dev-headers_${{ env.KERNEL_VERSION }}_${{ steps.extract_info.outputs.value }}
-          path: kernel_workspace/kernel_platform/module_headers.tar.gz
 
       - name: Apply patch_linux and Replace Image
         if: ${{ github.event.inputs.KPM == 'KPM' }}
@@ -1294,50 +1250,6 @@ jobs:
         run: |
           echo "value=${{ startsWith(github.event.inputs.ZRAM, '1/') && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'KPM' && '_KPM' || github.event.inputs.KPM == 'KPN' && '_KPN' || '' }}${{ github.event.inputs.LSM == 'true' && '_LSM' || '' }}_ILH${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
 
-      - name: 📦 装载真实 DTBO 并强制配置 AnyKernel3
-        run: |
-          echo "✅ 准备将篡改好的设备树文件装载到 AK3 中..."
-          
-          # 1. 查找真正的 dtbo.img
-          # 我们在 kernel_workspace 下找体积大于 1MB 的，避开那些几KB的测试垃圾
-          REAL_DTBO=$(find kernel_workspace/kernel_platform/ -type f -name "dtbo.img" -size +1M | head -n 1)
-          if [ -n "$REAL_DTBO" ]; then
-            echo "🎯 找到并装载真实 dtbo.img: $REAL_DTBO"
-            cp "$REAL_DTBO" ./AnyKernel3/dtbo.img
-          else
-            echo "⚠️ 未找到大于 1MB 的 dtbo.img，退阶查找任意 dtbo.img..."
-            REAL_DTBO=$(find kernel_workspace/kernel_platform/ -type f -name "dtbo.img" | head -n 1)
-            [ -n "$REAL_DTBO" ] && cp "$REAL_DTBO" ./AnyKernel3/dtbo.img
-          fi
-          
-          # 2. 查找真正的 dtb (如果有的话，顺便带上)
-          REAL_DTB=$(find kernel_workspace/kernel_platform/ -type f \( -name "dtb.img" -o -name "dtb" \) | grep -v "apq" | grep -v "sdm" | head -n 1)
-          if [ -n "$REAL_DTB" ]; then
-            echo "🎯 找到并装载真实 dtb: $REAL_DTB"
-            cp "$REAL_DTB" ./AnyKernel3/dtb
-          fi
-          
-          # 3. 强制魔改 anykernel.sh，下达刷入指令
-          AK3_SH="./AnyKernel3/anykernel.sh"
-          if [ -f "$AK3_SH" ]; then
-            echo "🔧 正在修改 anykernel.sh 刷机配置..."
-            
-            # 将默认的关闭(0)替换为开启(1)
-            sed -i 's/flash_dtbo=0/flash_dtbo=1/g' "$AK3_SH" || true
-            sed -i 's/flash_dtb=0/flash_dtb=1/g' "$AK3_SH" || true
-            
-            # 暴力兜底：如果脚本里根本没写这两个变量，强行在末尾追加
-            grep -q "flash_dtbo=" "$AK3_SH" || echo "flash_dtbo=1" >> "$AK3_SH"
-            grep -q "flash_dtb=" "$AK3_SH" || echo "flash_dtb=1" >> "$AK3_SH"
-            
-            echo "✅ AK3 设备树强刷开关已激活！"
-          else
-            echo "❌ 警告：未找到 anykernel.sh 文件，这很不正常！"
-          fi
-          
-          echo "📦 最终 AK3 目录产物确认："
-          ls -lh ./AnyKernel3/
-          
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
@@ -1408,3 +1320,87 @@ jobs:
         with:
           name: ZRAM-Module_${{ env.KERNEL_VERSION }}_${{ steps.extract_info.outputs.value }}
           path: ZRAM-Module/*
+      - name: Get Latest Commit Hash from SukiSU-Ultra
+        id: get_commit_hash
+        run: |
+          COMMIT_HASH=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/commits/builtin | jq -r .sha)
+          SHORT_COMMIT_HASH=$(echo $COMMIT_HASH | cut -c 1-7)  # 截取前 7 位
+          echo "LATEST_COMMIT_HASH=$SHORT_COMMIT_HASH" >> $GITHUB_ENV
+
+      - name: Generate Tag
+        id: get_date_tag
+        run: |
+          TAG_NAME=$(date +"%Y.%m.%d-%H%M")
+          echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}  # 使用正确的 tag 名称
+          name: "GT5 Kernel With SukiSU Ultra ${{ env.LATEST_COMMIT_HASH }} For ${{ env.ANDROID_VERSION == '16.0.0' && 'Realme UI 7.0' || env.ANDROID_VERSION == '15.0.0' && 'Realme UI 6.0' || 'WTF' }}"
+          body: |
+            Build For realme GT5(RMX3820/RMX3823)
+            CPU: ${{ env.CPU }}
+            CPU代号: ${{ env.CPUD }}
+            安卓版本(看好了再刷！): ${{ env.ANDROID_VERSION }} (${{ env.ANDROID_VERSION == '16.0.0' && 'Realme UI 7.0' || env.ANDROID_VERSION == '15.0.0' && 'Realme UI 6.0' || '什么玩意？' }})
+            内核版本: ${{ env.TKERNEL_VERSION }}
+            内核类型: ${{ env.BUILD_METHOD }}
+            KPM实现类型: ${{ github.event.inputs.KPM }}
+            BBG防格机: ${{ github.event.inputs.LSM_BBG == 'true' && '✅️' || '❌' }}
+            快速构建: ${{ github.event.inputs.FAST_BUILD == 'true' && '✅️' || '❌' }}
+            更多ZRAM算法: ${{ startsWith(github.event.inputs.ZRAM, '1/') && '✅️' || '❌' }}
+            网络功能拓展(NETFILTER): ${{ github.event.inputs.NETFILTER == 'true' && '✅️' || '❌' }}
+            网络优化算法(CCM): ${{ github.event.inputs.CCM == 'true' && '✅️' || '❌' }}
+            风驰驱动(GT5不需要这个，请取消！): ${{ github.event.inputs.SCHED_HMBIRD == 'true' && '✅️' || '❌' }}
+            修复UNICODE漏洞: ${{ github.event.inputs.UNICODE_BYPASS == 'true' && '✅️' || '❌' }}
+            使用开发版SUSFS: ${{ github.event.inputs.SUSFS_DEV == 'true' && '✅️' || '❌' }}
+            SukiSU Ultra管理器下载(AK3里应该有一个安装包): [SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra/releases)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create AnyKernel3 zip For Release
+        run: |
+          AK3ZIP_NAME="AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}.zip"
+          cd AnyKernel3
+          zip -r "../$AK3ZIP_NAME" ./*
+          echo "AK3ZIP_NAME=$AK3ZIP_NAME" >> $GITHUB_ENV
+
+
+      - name: Create ZRAM Module zip For Release
+        if: ${{ startsWith(github.event.inputs.ZRAM, '1/') && steps.zram_find.outputs.upload != 'false' }}
+        run: |
+          ZRAM_ZIP_NAME="ZRAM-Module_${{ env.KERNEL_VERSION }}_${{ steps.extract_info.outputs.value }}.zip"
+          cd ZRAM-Module
+          zip -r "../$ZRAM_ZIP_NAME" ./*
+          echo "ZRAM_ZIP_NAME=$ZRAM_ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Upload AnyKernel3 to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.AK3ZIP_NAME }}  # 直接引用变量
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: "GT5 Kernel With SukiSU ${{ env.LATEST_COMMIT_HASH }}"
+
+      - name: Upload ZRAM Module to Release
+        if: ${{ startsWith(github.event.inputs.ZRAM, '1/') && steps.zram_find.outputs.upload != 'false' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZRAM_ZIP_NAME }}  # 直接引用变量
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: "GT5 Kernel With SukiSU ${{ env.LATEST_COMMIT_HASH }}"
+
+      - name: Mark commit as built
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_MANAGE_TOKEN }}
+        run: |
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/variables/LAST_BUILT_COMMIT \
+            -f value=${{ vars.PENDING_UPSTREAM_COMMIT }}
+          
+
+      - name: Post-build Disk Check
+        run: df -h
