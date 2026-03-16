@@ -390,26 +390,33 @@ jobs:
             fi
             rm -f "$dir/android/abi_gki_protected_exports_"* 2>/dev/null || echo "No protected exports in $dir"
           done
-      - name: 🧬 修正 OEM_VM 权限基因 (只解锁, 不自启)
+      - name: 🧬 终极暴力注入 (全盘覆盖 Oplus/Realme 私有设备树)
         run: |
-          DTS_FILE="kernel_workspace/kernel_platform/qcom/proprietary/devicetree/qcom/kalama-oemvm.dtsi"
+          echo "✅ 开始地毯式轰炸所有设备树文件..."
           
-          if [ -f "$DTS_FILE" ]; then
-            echo "✅ 找到设备树，正在移除强制校验并注入 Owner 权限..."
-            
-            # 1. 赋予 Android (VMID 3) 绝对控制权
-            # 2. 移除 crash-fatal 属性，防止它挂了导致整机重启
-            # 3. 移除 qcom,pasid，尝试绕过 TrustZone 强制签名检查
-            sed -i '/image-name = "qcom,oemvm";/a \		qcom,owner-vmid = <3>;' "$DTS_FILE"
-            sed -i 's/vm-attrs = "crash-fatal";/vm-attrs = "non-fatal";/g' "$DTS_FILE"
-            sed -i '/qcom,pasid/d' "$DTS_FILE"
-            
-            echo "🔥 注入完成，查看节点："
-            grep -A 15 "qcom,oemvm" "$DTS_FILE"
-          else
-            echo "❌ 未找到 DTS 文件"
+          # 找到整个工作区里，所有包含 qcom,oemvm 的 dts 和 dtsi 文件
+          TARGET_FILES=$(find kernel_workspace/ -type f \( -name "*.dts" -o -name "*.dtsi" \) -exec grep -l 'image-name = "qcom,oemvm";' {} +)
+          
+          if [ -z "$TARGET_FILES" ]; then
+            echo "❌ 没找到任何包含 qcom,oemvm 的文件，这不可能！"
             exit 1
           fi
+          
+          for file in $TARGET_FILES; do
+            echo "🎯 锁定并篡改目标: $file"
+            
+            # 1. 强制赋予 Android (VMID 3) 的所有权
+            sed -i '/image-name = "qcom,oemvm";/a \		qcom,owner-vmid = <3>;' "$file"
+            
+            # 2. 将崩溃致命级别降低，防止系统黑屏重启
+            sed -i 's/vm-attrs = "crash-fatal";/vm-attrs = "non-fatal";/g' "$file"
+            
+            # 3. 抹除 pasid 签名校验配置
+            sed -i '/qcom,pasid/d' "$file"
+          done
+          
+          echo "🔥 轰炸结果确认 (如果下面有输出，说明注入成功)："
+          grep -rn "qcom,owner-vmid = <3>;" kernel_workspace/ || true
       - name: Kernel Version Handling
         run: |
           cd kernel_workspace/kernel_platform
