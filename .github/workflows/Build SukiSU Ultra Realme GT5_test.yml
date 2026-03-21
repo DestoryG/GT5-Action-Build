@@ -1347,7 +1347,7 @@ jobs:
       - name: Get Latest Commit Hash from SukiSU-Ultra
         id: get_commit_hash
         run: |
-          COMMIT_HASH=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/commits/builtin | jq -r .sha)
+          COMMIT_HASH=$(curl -s https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/commits/main | jq -r .sha)
           SHORT_COMMIT_HASH=$(echo $COMMIT_HASH | cut -c 1-7)  # 截取前 7 位
           echo "LATEST_COMMIT_HASH=$SHORT_COMMIT_HASH" >> $GITHUB_ENV
 
