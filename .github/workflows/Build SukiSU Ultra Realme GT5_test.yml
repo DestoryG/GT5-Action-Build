@@ -94,6 +94,11 @@ on:
         description: "是否启用关键分区写入保护模块(BBG)？"
         required: true
         default: true
+      HymoFS:
+        type: boolean
+        description: "是否启用HymoFS？"
+        required: true
+        default: true
       NETFILTER:
         type: boolean
         description: "是否启用网络功能拓展(NETFILTER)？"
@@ -851,6 +856,13 @@ jobs:
           echo "正在启用内核级基带保护支持…"
           curl -LSs https://raw.githubusercontent.com/vc-teahouse/Baseband-guard/main/setup.sh | bash
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' ./security/Kconfig
+          
+      - name: Apply HymoFS
+        if: ${{ github.event.inputs.HymoFS == 'true' }}
+        run: |
+          cd kernel_workspace/kernel_platform/common
+          echo "正在启用HymoFS支持…"
+          curl -LSs https://raw.githubusercontent.com/Anatdx/HymoFS/main/setup.sh | bash -s defconfig arch/arm64/configs/gki_defconfig
 
       # 配置信息，带*为附加项目，具有一定危险性和不确定性
       - name: Add Configuration Settings
@@ -1259,7 +1271,7 @@ jobs:
       - name: Set zip Suffix
         id: suffix
         run: |
-          echo "value=${{ startsWith(github.event.inputs.ZRAM, '1/') && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'KPM' && '_KPM' || github.event.inputs.KPM == 'KPN' && '_KPN' || '' }}${{ github.event.inputs.LSM == 'true' && '_LSM' || '' }}_ILH${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
+          echo "value=${{ startsWith(github.event.inputs.ZRAM, '1/') && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'KPM' && '_KPM' || github.event.inputs.KPM == 'KPN' && '_KPN' || '' }}${{ github.event.inputs.LSM_BBG == 'true' && '_LSM' || '' }}_ILH${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
 
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
