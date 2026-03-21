@@ -6,7 +6,7 @@ permissions:
 
 env:
   UPSTREAM_REPO: SukiSU-Ultra/SukiSU-Ultra
-  UPSTREAM_BRANCH: main
+  UPSTREAM_BRANCH: builtin
 
 on:
   workflow_dispatch:
