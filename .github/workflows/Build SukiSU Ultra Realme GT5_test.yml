@@ -96,7 +96,7 @@ on:
         default: true
       HymoFS:
         type: boolean
-        description: "是否启用HymoFS？"
+        description: "是否启用HymoFS元模块挂载支持？"
         required: true
         default: true
       NETFILTER:
@@ -300,7 +300,8 @@ jobs:
           python3 -c "import unicodedata; print(''.join(f'\033[31mU+{ord(c):04X}\033[0m ' if c.isspace() or unicodedata.category(c)=='Cf' else f'U+{ord(c):04X} ' for c in '''${{ github.event.inputs.SUFFIX }}'''))"
           echo "Selected LSM_BBG: ${{ github.event.inputs.LSM_BBG }}"
           echo "Selected NETFILTER: ${{ github.event.inputs.NETFILTER }}"
-          echo "Selected CCM: ${{ github.event.inputs.CCM }}"
+          echo "Selected BBR: ${{ github.event.inputs.CCM }}"
+          echo "Selected HymoFS: ${{ github.event.inputs.HymoFS }}"
           echo "Selected SUSFS_DEV: ${{ github.event.inputs.SUSFS_DEV }}"
           echo "Selected FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
           echo "Selected SCHED_HMBIRD: ${{ github.event.inputs.SCHED_HMBIRD }}"
@@ -1371,10 +1372,11 @@ jobs:
             内核类型: ${{ env.BUILD_METHOD }}
             KPM实现类型: ${{ github.event.inputs.KPM }}
             BBG防格机: ${{ github.event.inputs.LSM_BBG == 'true' && '✅️' || '❌' }}
+            HymoFS元模块挂载: ${{ github.event.inputs.HymoFS == 'true' && '✅️' || '❌' }}
             快速构建: ${{ github.event.inputs.FAST_BUILD == 'true' && '✅️' || '❌' }}
             更多ZRAM算法: ${{ startsWith(github.event.inputs.ZRAM, '1/') && '✅️' || '❌' }}
             网络功能拓展(NETFILTER): ${{ github.event.inputs.NETFILTER == 'true' && '✅️' || '❌' }}
-            网络优化算法(CCM): ${{ github.event.inputs.CCM == 'true' && '✅️' || '❌' }}
+            网络优化算法(BBR+FQ): ${{ github.event.inputs.CCM == 'true' && '✅️' || '❌' }}
             风驰驱动(GT5不需要这个，请取消！): ${{ github.event.inputs.SCHED_HMBIRD == 'true' && '✅️' || '❌' }}
             修复UNICODE漏洞: ${{ github.event.inputs.UNICODE_BYPASS == 'true' && '✅️' || '❌' }}
             使用开发版SUSFS: ${{ github.event.inputs.SUSFS_DEV == 'true' && '✅️' || '❌' }}
