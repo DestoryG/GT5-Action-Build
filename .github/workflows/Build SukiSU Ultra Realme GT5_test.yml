@@ -14,7 +14,7 @@ on:
         type: choice
         description: "管理器调用方向"
         required: true
-        default: MIUIX
+        default: MD3
         options:
           - MIUIX
           - MIUIX_SPOOF
@@ -1719,7 +1719,18 @@ jobs:
 
       - name: Post-build Disk Check
         run: df -h
-
+      
+      - name: Mark commit as built
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_MANAGE_TOKEN }}
+        run: |
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/variables/LAST_BUILT_COMMIT \
+            -f value=${{ vars.PENDING_UPSTREAM_COMMIT }}
+        
       - name: Generate Release Info
         id: release_info
         run: |
