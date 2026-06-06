@@ -57,7 +57,7 @@ on:
         type: string
         description: "分支名(必填)/自定义版本标识(留空不修改)/回退分支提交哈希版本(留空不修改)"
         required: false
-        default: "builtin/DestoryG-Presents/"
+        default: "main/DestoryG-Presents/"
       LZ4_UPDATE:
         type: boolean
         description: "是否升级LZ4到上游最新？"
