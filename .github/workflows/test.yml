@@ -745,7 +745,7 @@ jobs:
           GIT_HASH=$(git rev-parse --short HEAD)
           echo "🚀 [DEBUG 6] 本地 KernelSU Git HASH: $GIT_HASH"
 
-          KSU_VERSION_TAG="3.1.8"
+          KSU_VERSION_TAG="4.1.0"
           echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
 
           if [ -z "$CUSTOM_TAG" ]; then
