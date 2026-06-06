@@ -1,4 +1,4 @@
-name: Build GT5 Kernels test
+name: Build GT5 Kernels Test
 on:
   workflow_dispatch:
     inputs:
@@ -382,7 +382,7 @@ jobs:
           git config --global user.name "Numbersf"
           git config --global user.email "263623064@qq.com"
           mkdir kernel_workspace && cd kernel_workspace
-          git clone https://github.com/Numbersf/Action-Build.git -b SukiSU-Ultra
+          git clone https://github.com/DestoryG/Action-Build.git -b SukiSU-Ultra
 
       - name: Fork Check
         run: |
@@ -711,7 +711,7 @@ jobs:
           [[ -n "$CUSTOM_TAG" ]] && echo "自定义版本标识: $CUSTOM_TAG" || echo "自定义版本标识: 未启用"
           [[ -n "$MANUAL_HASH" ]] && echo "手动指定 hash: $MANUAL_HASH" || echo "手动指定 hash: 未启用"
 
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/${MANAGER_BRANCH}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/${MANAGER_BRANCH}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
           cd ./KernelSU
 
           # 如果指定了手动 hash，就切换到该提交
@@ -721,7 +721,7 @@ jobs:
             SHORT_HASH=${MANUAL_HASH:0:8}
           fi
 
-          KSU_VERSION_TAG=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/releases/latest \
+          KSU_VERSION_TAG=$(curl -fsSL https://api.github.com/repos/ReSukiSU/ReSukiSU/releases/latest \
             | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
           if [[ -z "$KSU_VERSION_TAG" || "$(printf '%s\n' "$KSU_VERSION_TAG" "3.1.7" | sort -V | head -n1)" != "3.1.7" ]]; then
             KSU_VERSION_TAG="3.1.7"
@@ -1527,27 +1527,27 @@ jobs:
           git clone https://github.com/Numbersf/AnyKernel3 --depth=1
           rm -rf ./AnyKernel3/.git
           mkdir -p kernel_workspace/kernel_platform/out/Final-Image-Find/
-          
-          # 1. 寻找 Image
-          image_path=$(find "./kernel_workspace/kernel_platform/out/" -name "Image" | head -n 1)
+          image_path=""
+          if [ -d "./kernel_workspace/kernel_platform/common/out/" ]; then
+            image_path=$(find "./kernel_workspace/kernel_platform/common/out/" -name "Image" | head -n 1)
+            if [ -n "$image_path" ]; then
+              echo "✅ 使用 make 编译的统一路径，成功找到 Image 文件"
+            fi
+          fi
+          if [ -z "$image_path" ] && [ -d "./kernel_workspace/kernel_platform/out/" ]; then
+            image_path=$(find "./kernel_workspace/kernel_platform/out/" -name "Image" | head -n 1)
+            if [ -n "$image_path" ]; then
+              echo "✅ 使用官方脚本编译，成功找到 Image 文件"
+            fi
+          fi
           if [ -z "$image_path" ]; then
             echo "❌ 未找到 Image 文件，构建失败" >&2
             exit 1
           fi
-          cp "$image_path" ./AnyKernel3/Image
-          cp "$image_path" kernel_workspace/kernel_platform/out/Final-Image-Find/Image
-          
-          # 2. 寻找并打包编译出的 .ko 驱动模块 (极其关键!)
-          echo "开始收集内核模块..."
-          mkdir -p ./AnyKernel3/modules/vendor/lib/modules/
-          
-          # Oplus/高通 官方编译通常会将产物输出到 out/.../dist 目录
-          DIST_DIR=$(find "./kernel_workspace/kernel_platform/out/" -type d -name "dist" | head -n 1)
-          if [ -n "$DIST_DIR" ]; then
-            find "$DIST_DIR" -name "*.ko" -exec cp {} ./AnyKernel3/modules/vendor/lib/modules/ \;
-            echo "✅ 成功收集驱动模块到 AnyKernel3"
-          else
-            echo "⚠️ 未找到 dist 目录，模块可能未生成！"
+          if [ -f "$image_path" ]; then
+            echo "✅ Image file finally located at: $image_path"
+            cp "$image_path" ./AnyKernel3/Image
+            cp "$image_path" kernel_workspace/kernel_platform/out/Final-Image-Find/Image
           fi
 
       - name: Apply KPX and Replace Image
@@ -1608,13 +1608,13 @@ jobs:
           echo "Using branch: $MANAGER_BRANCH"
           echo "Downloading artifact: $MANAGER_ARTIFACT"
 
-          run_id=$(gh api "repos/SukiSU-Ultra/SukiSU-Ultra/actions/workflows/build-manager.yml/runs?branch=$MANAGER_BRANCH&status=success&per_page=1" --jq '.workflow_runs[0].id' || echo "")
+          run_id=$(gh api "repos/ReSukiSU/ReSukiSU/actions/workflows/build-manager.yml/runs?branch=$MANAGER_BRANCH&status=success&per_page=1" --jq '.workflow_runs[0].id' || echo "")
 
           if [[ -z "$run_id" ]]; then
             echo "No successful workflow run found on branch $MANAGER_BRANCH. Skipping download."
             exit 0
           fi
-          artifact_url=$(gh api "repos/SukiSU-Ultra/SukiSU-Ultra/actions/runs/$run_id/artifacts" | jq -r ".artifacts[] | select(.name == \"$MANAGER_ARTIFACT\") | .archive_download_url" | head -n1)
+          artifact_url=$(gh api "repos/ReSukiSU/ReSukiSU/actions/runs/$run_id/artifacts" | jq -r ".artifacts[] | select(.name == \"$MANAGER_ARTIFACT\") | .archive_download_url" | head -n1)
 
           if [[ -z "$artifact_url" ]]; then
             echo "No artifact '$MANAGER_ARTIFACT' found in run $run_id. Skipping download."
@@ -1758,7 +1758,7 @@ jobs:
       # 2. 打包 AnyKernel3 (原版 Image 定位逻辑)
       - name: Package AnyKernel3 Zip
         run: |
-          AK3ZIP_NAME="AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}.zip"
+          AK3ZIP_NAME="AnyKernel3_ReSukiSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}.zip"
           cd AnyKernel3
           zip -r "../$AK3ZIP_NAME" ./*
           echo "AK3ZIP_NAME=$AK3ZIP_NAME" >> $GITHUB_ENV
@@ -1777,7 +1777,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          name: "Kernel Build ${{ env.TAG_NAME }} (SukiSU ${{ env.LATEST_COMMIT_HASH }})"
+          name: "Kernel Build ${{ env.TAG_NAME }} (ReSukiSU ${{ env.LATEST_COMMIT_HASH }})"
           body: |
             ### 构建详情
             - **设备配置**: `${{ github.event.inputs.FILE }}`
@@ -1785,7 +1785,7 @@ jobs:
             - **Android 版本**: `${{ env.ANDROID_VERSION }}`
             - **构建模式**: `${{ github.event.inputs.FAST_BUILD == 'true' && '极速构建 (Fast)' || '常规构建' }}`
             - **集成模块**:
-                - SukiSU Ultra: `${{ env.LATEST_COMMIT_HASH }}`
+                - ReSukiSU: `${{ env.LATEST_COMMIT_HASH }}`
                 - SUSFS: `${{ github.event.inputs.SUSFS_META != '-1' && '✅' || '❌' }}`
                 - ZRAM 优化: `${{ env.ZRAM_ALGO }} (${{ env.ZRAM_SIZE }})`
           files: |
