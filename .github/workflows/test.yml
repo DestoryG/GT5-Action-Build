@@ -699,25 +699,33 @@ jobs:
       - name: Add SukiSU Ultra
         run: |
           cd kernel_workspace/kernel_platform
-          echo "🚀 [DEBUG 1] 当前工作目录: \$(pwd)"
+          echo "🚀 [DEBUG 1] 当前工作目录: $(pwd)"
           
-          MANAGER_BRANCH="${{ steps.manager.outputs.manager_branch }}"
+          MANAGER_BRANCH="${{ github.event.inputs.MANAGER_SOURCE }}"
+          # 根据你的逻辑，这里转换为对应分支
+          if [ "$MANAGER_BRANCH" = "MD3" ] || [ "$MANAGER_BRANCH" = "MD3_SPOOF" ]; then
+            MANAGER_BRANCH_REAL="old"
+          else
+            MANAGER_BRANCH_REAL="main"
+          fi
+          
           KSU_META="${{ github.event.inputs.KSU_META }}"
-          echo "🚀 [DEBUG 2] 接收到的 KSU_META 为: \$KSU_META"
+          echo "🚀 [DEBUG 2] 接收到的 KSU_META 为: $KSU_META"
 
-          # 校验参数格式（必须包含至少两个斜杠）
-          if [[ "\$(grep -o '/' <<< "\$KSU_META" | wc -l)" -lt 2 ]]; then
+          # 🌟 修正1：移除转义，使用标准 Bash 算术表达式校验格式
+          SLASH_COUNT=$(grep -o '/' <<< "$KSU_META" | wc -l)
+          if [ "$SLASH_COUNT" -lt 2 ]; then
             echo "❌ 错误: KSU_META 参数缺少必要的分隔符 '/'，格式应为: 分支名/自定义标识/提交hash"
             exit 10
           fi
 
-          # 🌟 修复核心痛点：read 末尾必须加 || true，防止因为字段未填满触发 set -e 导致工作流假死
-          IFS='/' read -r BRANCH_NAME CUSTOM_TAG MANUAL_HASH <<< "\$KSU_META" || true
+          # 🌟 修正2：移除 read 的转义，通过修剪无换行符标记安全解析
+          IFS='/' read -r BRANCH_NAME CUSTOM_TAG MANUAL_HASH <<< "$KSU_META" || true
           
-          echo "🚀 [DEBUG 3] 解析完成 -> 分支名: \$BRANCH_NAME | 标签: \$CUSTOM_TAG | 哈希: \$MANUAL_HASH"
+          echo "🚀 [DEBUG 3] 解析完成 -> 分支名: $BRANCH_NAME | 标签: $CUSTOM_TAG | 哈希: $MANUAL_HASH"
 
           echo "🌐 [DEBUG 4] 开始拉取上游 setup.sh..."
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/${MANAGER_BRANCH}/kernel/setup.sh" | bash -s "\$BRANCH_NAME"
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/${MANAGER_BRANCH_REAL}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
           
           if [ ! -d "./KernelSU" ]; then
             echo "❌ 错误: ./KernelSU 目录不存在，上游拉取或集成失败！"
@@ -727,40 +735,12 @@ jobs:
           cd ./KernelSU
           echo "🚀 [DEBUG 5] 成功进入 KernelSU 目录"
 
-          # 如果指定了手动 hash，切换到指定提交
-          if [[ -n "\$MANUAL_HASH" ]]; then
-            echo "⚙️ 正在切换到指定的提交哈希: \$MANUAL_HASH"
-            git fetch origin "\$BRANCH_NAME" --depth=50
-            git checkout "\$MANUAL_HASH"
+          # 🌟 修正3：如果指定了手动 hash，正常拉取并切换
+          if [ -n "$MANUAL_HASH" ]; then
+            echo "⚙️ 正在切换到指定的提交哈希: $MANUAL_HASH"
+            git fetch origin "$BRANCH_NAME" --depth=50
+            git checkout "$MANUAL_HASH"
           fi
-
-          GIT_HASH=\$(git rev-parse --short HEAD)
-          echo "🚀 [DEBUG 6] 本地 KernelSU Git HASH: \$GIT_HASH"
-
-          KSU_VERSION_TAG="3.1.8"
-          echo "KSU_VERSION_TAG=\$KSU_VERSION_TAG" >> \$GITHUB_ENV
-
-          if [[ -z "\$CUSTOM_TAG" ]]; then
-            VERSION_FULL="v\$KSU_VERSION_TAG-\$GIT_HASH@\$BRANCH_NAME"
-          else
-            VERSION_FULL="v\$KSU_VERSION_TAG-\$CUSTOM_TAG@\$BRANCH_NAME[\$GIT_HASH]"
-          fi
-          echo "🚀 [DEBUG 7] 准备写入的版本号: \$VERSION_FULL"
-
-          # 🌟 修复潜在痛点：使用 sudo + tee -a 确保在任何权限下都能安全追加
-          echo "" | sudo tee -a kernel/Makefile > /dev/null
-          echo "KSU_VERSION_FULL := \$VERSION_FULL" | sudo tee -a kernel/Makefile > /dev/null
-          echo "KSU_VERSION_API := \$KSU_VERSION_TAG" | sudo tee -a kernel/Makefile > /dev/null
-          echo "🚀 [DEBUG 8] Makefile 写入完成"
-
-          # 计算 Manager 所需的版本序列号
-          KSU_VERSION=\$(expr \$(git rev-list --count HEAD 2>/dev/null || echo 13000) + 37185)
-          echo "KSUVER=\$KSU_VERSION" >> \$GITHUB_ENV
-          echo "🚀 [DEBUG 9] KSUVER 计算完成: \$KSU_VERSION"
-
-          echo "::group::最终验证 Makefile 尾部内容"
-          tail -n 15 kernel/Makefile
-          echo "::endgroup::"
       - name: Apply Patches SukiSU Ultra
         env:
           FILE: ${{ github.event.inputs.FILE }}
