@@ -7,9 +7,9 @@ on:
         type: choice
         description: '清理的工作流名称'
         required: true
-        default: 'Build SukiSU Ultra Realme GT5'
+        default: 'Build GT5 Kernels'
         options:
-          - Build SukiSU Ultra Realme GT5
+          - Build GT5 Kernels
           - CAll Build Start UP
           - Update Checker
           - Build For Realme UI 6
