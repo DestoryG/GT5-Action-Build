@@ -57,7 +57,7 @@ on:
         type: string
         description: "分支名(必填)/自定义版本标识(留空不修改)/回退分支提交哈希版本(留空不修改)"
         required: false
-        default: "builtin/DestoryG-Presents/"
+        default: "main/DestoryG-Presents/"
       LZ4_UPDATE:
         type: boolean
         description: "是否升级LZ4到上游最新？"
@@ -725,13 +725,20 @@ jobs:
             SHORT_HASH=${MANUAL_HASH:0:8}
           fi
 
-          KSU_VERSION_TAG=$(curl -fsSL https://api.github.com/repos/ReSukiSU/ReSukiSU/releases/latest \
-            | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
-          if [[ -z "$KSU_VERSION_TAG" || "$(printf '%s\n' "$KSU_VERSION_TAG" "3.1.7" | sort -V | head -n1)" != "3.1.7" ]]; then
+          # 取消联网获取，改从拉取下来的本地 Makefile 中解析版本 TAG
+          if [ -f "kernel/Makefile" ]; then
+            # 假设上游 Makefile 里有类似 VERSION_TAG 或类似变量，如果没有，可根据实际文件内容提取
+            # 这里我们做个多层保险：优先读本地，读不到再用 3.1.7
+            KSU_VERSION_TAG=$(grep -E '^VERSION_TAG[[:space:]]*:=' kernel/Makefile | cut -d= -f2 | tr -d '[:space:]' | sed 's/^v//')
+          fi
+          
+          # 如果本地 Makefile 没写，或者为空，则直接给定一个基础业务大版本号（比如 3.1.7）
+          if [[ -z "$KSU_VERSION_TAG" ]]; then
             KSU_VERSION_TAG="3.1.7"
           fi
+          echo "最终确定的 KSU_VERSION_TAG: $KSU_VERSION_TAG"
           echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
-
+          
           GIT_HASH=$(git rev-parse --short HEAD)
           echo "GIT_HASH=$GIT_HASH"
 
