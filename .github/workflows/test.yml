@@ -741,6 +741,34 @@ jobs:
             git fetch origin "$BRANCH_NAME" --depth=50
             git checkout "$MANUAL_HASH"
           fi
+
+          GIT_HASH=$(git rev-parse --short HEAD)
+          echo "🚀 [DEBUG 6] 本地 KernelSU Git HASH: $GIT_HASH"
+
+          KSU_VERSION_TAG="3.1.8"
+          echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
+
+          if [ -z "$CUSTOM_TAG" ]; then
+            VERSION_FULL="v$KSU_VERSION_TAG-$GIT_HASH@$BRANCH_NAME"
+          else
+            VERSION_FULL="v$KSU_VERSION_TAG-$CUSTOM_TAG@$BRANCH_NAME[$GIT_HASH]"
+          fi
+          echo "🚀 [DEBUG 7] 准备写入的版本号: $VERSION_FULL"
+
+          # 🌟 修正4：移除内部所有 \$，改用标准单一符号安全追加
+          echo "" | sudo tee -a kernel/Makefile > /dev/null
+          echo "KSU_VERSION_FULL := $VERSION_FULL" | sudo tee -a kernel/Makefile > /dev/null
+          echo "KSU_VERSION_API := $KSU_VERSION_TAG" | sudo tee -a kernel/Makefile > /dev/null
+          echo "🚀 [DEBUG 8] Makefile 写入完成"
+
+          # 计算 Manager 所需的版本序列号
+          KSU_VERSION=$(expr $(git rev-list --count HEAD 2>/dev/null || echo 13000) + 30700)
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+          echo "🚀 [DEBUG 9] KSUVER 计算完成: $KSU_VERSION"
+
+          echo "::group::最终验证 Makefile 尾部内容"
+          tail -n 15 kernel/Makefile
+          echo "::endgroup::"
       - name: Apply Patches SukiSU Ultra
         env:
           FILE: ${{ github.event.inputs.FILE }}
