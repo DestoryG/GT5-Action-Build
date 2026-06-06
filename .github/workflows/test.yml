@@ -702,85 +702,58 @@ jobs:
           MANAGER_BRANCH="${{ steps.manager.outputs.manager_branch }}"
           KSU_META="${{ github.event.inputs.KSU_META }}"
 
-          # 必须包含两个分隔符（至少三个字段）
+          # 校验参数格式
           if [[ "$(grep -o '/' <<< "$KSU_META" | wc -l)" -lt 2 ]]; then
-            echo "错误: KSU_META 参数缺少必要的分隔符 '/'，格式应为: 分支名/自定义标识(可省略)/提交hash(可省略)"
+            echo "❌ 错误: KSU_META 参数缺少必要的分隔符 '/'，格式应为: 分支名/自定义标识/提交hash"
             exit 10
           fi
 
-          # 解析字段：分支 / 自定义标识 / 手动 hash
+          # 解析字段
           IFS='/' read -r BRANCH_NAME CUSTOM_TAG MANUAL_HASH <<< "$KSU_META"
 
           echo "分支名: $BRANCH_NAME"
           [[ -n "$CUSTOM_TAG" ]] && echo "自定义版本标识: $CUSTOM_TAG" || echo "自定义版本标识: 未启用"
           [[ -n "$MANUAL_HASH" ]] && echo "手动指定 hash: $MANUAL_HASH" || echo "手动指定 hash: 未启用"
 
+          # 1. 运行官方集成脚本
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/${MANAGER_BRANCH}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
+          
+          # 2. 进入源码目录
           cd ./KernelSU
 
-          # 如果指定了手动 hash，就切换到该提交
+          # 如果指定了手动 hash，切换到指定提交
           if [[ -n "$MANUAL_HASH" ]]; then
             git fetch origin "$BRANCH_NAME" --depth=50
             git checkout "$MANUAL_HASH"
-            SHORT_HASH=${MANUAL_HASH:0:8}
           fi
 
-          # 取消联网获取，改从拉取下来的本地 Makefile 中解析版本 TAG
-          if [ -f "kernel/Makefile" ]; then
-            # 假设上游 Makefile 里有类似 VERSION_TAG 或类似变量，如果没有，可根据实际文件内容提取
-            # 这里我们做个多层保险：优先读本地，读不到再用 3.1.7
-            KSU_VERSION_TAG=$(grep -E '^VERSION_TAG[[:space:]]*:=' kernel/Makefile | cut -d= -f2 | tr -d '[:space:]' | sed 's/^v//')
-          fi
-          
-          # 如果本地 Makefile 没写，或者为空，则直接给定一个基础业务大版本号（比如 3.1.7）
-          if [[ -z "$KSU_VERSION_TAG" ]]; then
-            KSU_VERSION_TAG="3.1.7"
-          fi
-          echo "最终确定的 KSU_VERSION_TAG: $KSU_VERSION_TAG"
-          echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
-          
+          # 获取本地 Git 动态参数（不再联网抓取 Release Tag）
           GIT_HASH=$(git rev-parse --short HEAD)
-          echo "GIT_HASH=$GIT_HASH"
+          echo "当前 KernelSU 提交 HASH: $GIT_HASH"
 
-          # 组装版本号
-          if [[ -n "$MANUAL_HASH" ]]; then
-            USE_HASH="$SHORT_HASH"
-          else
-            USE_HASH="$GIT_HASH"
-          fi
+          # 3. 安全计算版本号
+          # 既然不提供 Release，直接设定一个标准大版本号（如 3.1.8-Re），不再通过网络获取
+          KSU_VERSION_TAG="3.1.8"
+          echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
+
           if [[ -z "$CUSTOM_TAG" ]]; then
-            VERSION_FULL="v$KSU_VERSION_TAG-$USE_HASH@$BRANCH_NAME"
+            VERSION_FULL="v$KSU_VERSION_TAG-$GIT_HASH@$BRANCH_NAME"
           else
-            VERSION_FULL="v$KSU_VERSION_TAG-$CUSTOM_TAG@$BRANCH_NAME[$USE_HASH]"
+            VERSION_FULL="v$KSU_VERSION_TAG-$CUSTOM_TAG@$BRANCH_NAME[$GIT_HASH]"
           fi
 
-          ESC_VERSION_FULL=$(printf '%s' "$VERSION_FULL" | sed 's/[&|\\/]/\\&/g')
-          ESC_KSU_VERSION_TAG=$(printf '%s' "$KSU_VERSION_TAG" | sed 's/[&|\\/]/\\&/g')
+          # 4. 保险型强行追加（不使用容易匹配失败的 awk）
+          # 直接在底层 Makefile 的末尾或开头强行追加定义，覆盖旧值，绝不损坏原文件
+          echo "" >> kernel/Makefile
+          echo "KSU_VERSION_FULL := $VERSION_FULL" >> kernel/Makefile
+          echo "KSU_VERSION_API := $KSU_VERSION_TAG" >> kernel/Makefile
 
-          if grep -q '^KSU_VERSION_FULL := ' kernel/Makefile; then
-            sed -i "s|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $ESC_VERSION_FULL|" kernel/Makefile
-          else
-            awk -v full="$VERSION_FULL" '
-              /^REPO_OWNER :=/ && !done {
-                print
-                print ""
-                print "KSU_VERSION_FULL := " full
-                done=1
-                next
-              }
-              { print }
-            ' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile
-          fi
-
-          if grep -q '^KSU_VERSION_API := ' kernel/Makefile; then
-            sed -i "s|^KSU_VERSION_API := .*|KSU_VERSION_API := $ESC_KSU_VERSION_TAG|" kernel/Makefile
-          fi
-
-          KSU_VERSION=$(expr $(git rev-list --count "$MANAGER_BRANCH" 2>/dev/null || echo 13000) + 37185)
+          # 计算 Manager 所需的版本序列号
+          KSU_VERSION=$(expr $(git rev-list --count HEAD 2>/dev/null || echo 13000) + 37185)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
-          echo "::group::最终 Makefile 中版本信息及部分调试结果预览"
-          grep -nE '^(REPO_OWNER|REPO_NAME|REPO_BRANCH|KSU_VERSION_API|KSU_VERSION_FULL|VERSION_TAG|GIT_BIN|CURL_BIN)' kernel/Makefile
+          echo "::group::最终 Makefile 写入确认验证"
+          tail -n 15 kernel/Makefile
           echo "::endgroup::"
 
       - name: Apply Patches SukiSU Ultra
