@@ -437,6 +437,11 @@ jobs:
           # 存入缓存前清理无用文件
           sudo rm -f ~/apt-cache-debs/lock
           sudo rm -rf ~/apt-cache-debs/partial
+          
+      - name: Install Ccache-ECS
+        run: |
+         LIB_DIR="${GITHUB_WORKSPACE}/kernel_workspace/Action-Build/lib"
+         sudo cp -f "$LIB_DIR/ccache" /usr/bin/ccache && sudo chmod +x /usr/bin/ccache
 
       - name: Restore Ccache
         if: ${{ github.event.inputs.BUILD_NOCACHE == 'false' }}
