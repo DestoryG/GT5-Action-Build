@@ -422,20 +422,21 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          mkdir -p ~/apt-cache-debs
-          if [ "${{ steps.apt-cache.outputs.cache-hit }}" != "true" ]; then
-            sudo apt-get update
-          else
-            echo "✅ APT 缓存命中，跳过 apt-get update"
-          fi
+          mkdir -p ~/apt-cache-debs/partial
+          
+          # 修复 1: 解决权限问题。赋予 _apt 用户对缓存目录的读写权限
+          sudo chown -R _apt:root ~/apt-cache-debs
+          sudo chmod -R 777 ~/apt-cache-debs
+          
+          # 修复 2: 无论是否命中缓存，都必须执行 update 以获取最新的软件索引
+          sudo apt-get update
+          
+          # 执行安装，apt 会自动优先使用 ~/apt-cache-debs 中已有的包
           sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-cache-debs" python3 git curl libelf-dev build-essential flex bison libssl-dev libncurses-dev liblz4-tool zlib1g-dev libxml2-utils rsync unzip gawk dos2unix kmod libdw-dev elfutils dwarves
+          
+          # 存入缓存前清理无用文件
           sudo rm -f ~/apt-cache-debs/lock
           sudo rm -rf ~/apt-cache-debs/partial
-
-      - name: Install Ccache-ECS
-        run: |
-         LIB_DIR="${GITHUB_WORKSPACE}/kernel_workspace/Action-Build/lib"
-         sudo cp -f "$LIB_DIR/ccache" /usr/bin/ccache && sudo chmod +x /usr/bin/ccache
 
       - name: Restore Ccache
         if: ${{ github.event.inputs.BUILD_NOCACHE == 'false' }}
