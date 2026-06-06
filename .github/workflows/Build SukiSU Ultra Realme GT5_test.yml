@@ -382,7 +382,7 @@ jobs:
           git config --global user.name "Numbersf"
           git config --global user.email "263623064@qq.com"
           mkdir kernel_workspace && cd kernel_workspace
-          git clone https://github.com/Numbersf/Action-Build.git -b SukiSU-Ultra
+          git clone https://github.com/DestoryG/Action-Build.git -b SukiSU-Ultra
 
       - name: Fork Check
         run: |
@@ -437,7 +437,6 @@ jobs:
           # 存入缓存前清理无用文件
           sudo rm -f ~/apt-cache-debs/lock
           sudo rm -rf ~/apt-cache-debs/partial
-          
       - name: Install Ccache-ECS
         run: |
          LIB_DIR="${GITHUB_WORKSPACE}/kernel_workspace/Action-Build/lib"
@@ -677,107 +676,100 @@ jobs:
 
           case "$MANAGER_SOURCE" in
             MD3)
-              BRANCH="old"
-              ARTIFACT="manager"
+              BRANCH="main"
+              ARTIFACT="Manager-release"
               ;;
             MD3_SPOOF)
-              BRANCH="old"
-              ARTIFACT="Spoofed-Manager"
+              BRANCH="main"
+              ARTIFACT="Spoofed-Manager-release"
               ;;
             MIUIX_SPOOF)
               BRANCH="main"
-              ARTIFACT="Spoofed-Manager"
+              ARTIFACT="Spoofed-Manager-release"
               ;;
             MIUIX|*)
               BRANCH="main"
-              ARTIFACT="manager"
+              ARTIFACT="Manager-release"
               ;;
           esac
 
           echo "manager_branch=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "manager_artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
 
-      - name: Add SukiSU Ultra
+      - name: Add ReSukiSU
         run: |
           cd kernel_workspace/kernel_platform
-          MANAGER_BRANCH="${{ steps.manager.outputs.manager_branch }}"
+          echo "🚀 [DEBUG 1] 当前工作目录: $(pwd)"
+          
+          MANAGER_BRANCH="${{ github.event.inputs.MANAGER_SOURCE }}"
+          # 根据你的逻辑，这里转换为对应分支
+          if [ "$MANAGER_BRANCH" = "MD3" ] || [ "$MANAGER_BRANCH" = "MD3_SPOOF" ]; then
+            MANAGER_BRANCH_REAL="old"
+          else
+            MANAGER_BRANCH_REAL="main"
+          fi
+          
           KSU_META="${{ github.event.inputs.KSU_META }}"
+          echo "🚀 [DEBUG 2] 接收到的 KSU_META 为: $KSU_META"
 
-          # 必须包含两个分隔符（至少三个字段）
-          if [[ "$(grep -o '/' <<< "$KSU_META" | wc -l)" -lt 2 ]]; then
-            echo "错误: KSU_META 参数缺少必要的分隔符 '/'，格式应为: 分支名/自定义标识(可省略)/提交hash(可省略)"
+          # 🌟 修正1：移除转义，使用标准 Bash 算术表达式校验格式
+          SLASH_COUNT=$(grep -o '/' <<< "$KSU_META" | wc -l)
+          if [ "$SLASH_COUNT" -lt 2 ]; then
+            echo "❌ 错误: KSU_META 参数缺少必要的分隔符 '/'，格式应为: 分支名/自定义标识/提交hash"
             exit 10
           fi
 
-          # 解析字段：分支 / 自定义标识 / 手动 hash
-          IFS='/' read -r BRANCH_NAME CUSTOM_TAG MANUAL_HASH <<< "$KSU_META"
+          # 🌟 修正2：移除 read 的转义，通过修剪无换行符标记安全解析
+          IFS='/' read -r BRANCH_NAME CUSTOM_TAG MANUAL_HASH <<< "$KSU_META" || true
+          
+          echo "🚀 [DEBUG 3] 解析完成 -> 分支名: $BRANCH_NAME | 标签: $CUSTOM_TAG | 哈希: $MANUAL_HASH"
 
-          echo "分支名: $BRANCH_NAME"
-          [[ -n "$CUSTOM_TAG" ]] && echo "自定义版本标识: $CUSTOM_TAG" || echo "自定义版本标识: 未启用"
-          [[ -n "$MANUAL_HASH" ]] && echo "手动指定 hash: $MANUAL_HASH" || echo "手动指定 hash: 未启用"
-
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/${MANAGER_BRANCH}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
+          echo "🌐 [DEBUG 4] 开始拉取上游 setup.sh..."
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/${MANAGER_BRANCH_REAL}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
+          
+          if [ ! -d "./KernelSU" ]; then
+            echo "❌ 错误: ./KernelSU 目录不存在，上游拉取或集成失败！"
+            exit 1
+          fi
+          
           cd ./KernelSU
+          echo "🚀 [DEBUG 5] 成功进入 KernelSU 目录"
 
-          # 如果指定了手动 hash，就切换到该提交
-          if [[ -n "$MANUAL_HASH" ]]; then
+          # 🌟 修正3：如果指定了手动 hash，正常拉取并切换
+          if [ -n "$MANUAL_HASH" ]; then
+            echo "⚙️ 正在切换到指定的提交哈希: $MANUAL_HASH"
             git fetch origin "$BRANCH_NAME" --depth=50
             git checkout "$MANUAL_HASH"
-            SHORT_HASH=${MANUAL_HASH:0:8}
           fi
-
-          KSU_VERSION_TAG=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/releases/latest \
-            | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
-          if [[ -z "$KSU_VERSION_TAG" || "$(printf '%s\n' "$KSU_VERSION_TAG" "3.1.7" | sort -V | head -n1)" != "3.1.7" ]]; then
-            KSU_VERSION_TAG="3.1.7"
-          fi
-          echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
 
           GIT_HASH=$(git rev-parse --short HEAD)
-          echo "GIT_HASH=$GIT_HASH"
+          echo "🚀 [DEBUG 6] 本地 KernelSU Git HASH: $GIT_HASH"
 
-          # 组装版本号
-          if [[ -n "$MANUAL_HASH" ]]; then
-            USE_HASH="$SHORT_HASH"
+          KSU_VERSION_TAG="4.1.0"
+          echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
+
+          if [ -z "$CUSTOM_TAG" ]; then
+            VERSION_FULL="v$KSU_VERSION_TAG-$GIT_HASH@$BRANCH_NAME"
           else
-            USE_HASH="$GIT_HASH"
+            VERSION_FULL="v$KSU_VERSION_TAG-$CUSTOM_TAG@$BRANCH_NAME[$GIT_HASH]"
           fi
-          if [[ -z "$CUSTOM_TAG" ]]; then
-            VERSION_FULL="v$KSU_VERSION_TAG-$USE_HASH@$BRANCH_NAME"
-          else
-            VERSION_FULL="v$KSU_VERSION_TAG-$CUSTOM_TAG@$BRANCH_NAME[$USE_HASH]"
-          fi
+          echo "🚀 [DEBUG 7] 准备写入的版本号: $VERSION_FULL"
 
-          ESC_VERSION_FULL=$(printf '%s' "$VERSION_FULL" | sed 's/[&|\\/]/\\&/g')
-          ESC_KSU_VERSION_TAG=$(printf '%s' "$KSU_VERSION_TAG" | sed 's/[&|\\/]/\\&/g')
+          # 🌟 修正4：移除内部所有 \$，改用标准单一符号安全追加
+          echo "" | sudo tee -a kernel/Makefile > /dev/null
+          echo "KSU_VERSION_FULL := $VERSION_FULL" | sudo tee -a kernel/Makefile > /dev/null
+          echo "KSU_VERSION_API := $KSU_VERSION_TAG" | sudo tee -a kernel/Makefile > /dev/null
+          echo "🚀 [DEBUG 8] Makefile 写入完成"
 
-          if grep -q '^KSU_VERSION_FULL := ' kernel/Makefile; then
-            sed -i "s|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $ESC_VERSION_FULL|" kernel/Makefile
-          else
-            awk -v full="$VERSION_FULL" '
-              /^REPO_OWNER :=/ && !done {
-                print
-                print ""
-                print "KSU_VERSION_FULL := " full
-                done=1
-                next
-              }
-              { print }
-            ' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile
-          fi
-
-          if grep -q '^KSU_VERSION_API := ' kernel/Makefile; then
-            sed -i "s|^KSU_VERSION_API := .*|KSU_VERSION_API := $ESC_KSU_VERSION_TAG|" kernel/Makefile
-          fi
-
-          KSU_VERSION=$(expr $(git rev-list --count "$MANAGER_BRANCH" 2>/dev/null || echo 13000) + 37185)
+          # 计算 Manager 所需的版本序列号
+          KSU_VERSION=$(expr $(git rev-list --count HEAD 2>/dev/null || echo 13000) + 30700)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+          echo "🚀 [DEBUG 9] KSUVER 计算完成: $KSU_VERSION"
 
-          echo "::group::最终 Makefile 中版本信息及部分调试结果预览"
-          grep -nE '^(REPO_OWNER|REPO_NAME|REPO_BRANCH|KSU_VERSION_API|KSU_VERSION_FULL|VERSION_TAG|GIT_BIN|CURL_BIN)' kernel/Makefile
+          echo "::group::最终验证 Makefile 尾部内容"
+          tail -n 15 kernel/Makefile
           echo "::endgroup::"
-
-      - name: Apply Patches SukiSU Ultra
+      - name: Apply Patches ReSukiSU
         env:
           FILE: ${{ github.event.inputs.FILE }}
         run: |
@@ -1602,7 +1594,7 @@ jobs:
           wget -O ksu_module_susfs_1.5.2+_Release.zip https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
           cp ksu_module_susfs_1.5.2+_Release.zip ./AnyKernel3/
 
-      - name: Download Latest SukiSU-Ultra APK from CI
+      - name: Download Latest ReSukiSU APK from CI
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1613,21 +1605,34 @@ jobs:
           echo "Using branch: $MANAGER_BRANCH"
           echo "Downloading artifact: $MANAGER_ARTIFACT"
 
-          run_id=$(gh api "repos/SukiSU-Ultra/SukiSU-Ultra/actions/workflows/build-manager.yml/runs?branch=$MANAGER_BRANCH&status=success&per_page=1" --jq '.workflow_runs[0].id' || echo "")
+          run_id=$(gh api "repos/ReSukiSU/ReSukiSU/actions/workflows/build-manager.yml/runs?branch=$MANAGER_BRANCH&status=success&per_page=1" --jq '.workflow_runs[0].id' || echo "")
 
           if [[ -z "$run_id" ]]; then
-            echo "No successful workflow run found on branch $MANAGER_BRANCH. Skipping download."
+            echo "⚠️ No successful workflow run found on branch $MANAGER_BRANCH. Skipping download."
             exit 0
           fi
-          artifact_url=$(gh api "repos/SukiSU-Ultra/SukiSU-Ultra/actions/runs/$run_id/artifacts" | jq -r ".artifacts[] | select(.name == \"$MANAGER_ARTIFACT\") | .archive_download_url" | head -n1)
+          
+          artifact_url=$(gh api "repos/ReSukiSU/ReSukiSU/actions/runs/$run_id/artifacts" | jq -r ".artifacts[] | select(.name == \"$MANAGER_ARTIFACT\") | .archive_download_url" | head -n1)
 
           if [[ -z "$artifact_url" ]]; then
-            echo "No artifact '$MANAGER_ARTIFACT' found in run $run_id. Skipping download."
+            echo "⚠️ No artifact '$MANAGER_ARTIFACT' found in run $run_id. Skipping download."
             exit 0
           fi
+          
           echo "Downloading from: $artifact_url"
           curl -fL -H "Authorization: token $GITHUB_TOKEN" -o "${MANAGER_ARTIFACT}.zip" "$artifact_url"
-          unzip -j "${MANAGER_ARTIFACT}.zip" "*.apk" -d ./AnyKernel3/
+          
+          # 📦 1. 执行筛选解压
+          echo "📦 正在解压并筛选提取 arm64-v8a 架构的 APK..."
+          unzip -j "${MANAGER_ARTIFACT}.zip" "*arm64-v8a*.apk" -d ./AnyKernel3/
+          
+          # 🌟 2. 修复点：彻底移除可能导致解析混乱的复杂双引号，使用最纯粹安全的管道与格式化输出
+          echo "✅ AnyKernel3 目录下的 APK 部署情况："
+          if ls ./AnyKernel3/ | grep -q "arm64-v8a"; then
+            ls -l ./AnyKernel3/*arm64-v8a*.apk
+          else
+            echo "❌ 未成功提取到目标 arm64-v8a APK 文件，请检查上游压缩包内部路径结构"
+          fi
 
       - name: Set zip Suffix
         id: suffix
@@ -1637,7 +1642,7 @@ jobs:
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v7
         with:
-          name: AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}
+          name: AnyKernel3_ReSukiSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}
           path: ./AnyKernel3/*
 
       - name: Extract and Process ZRAM Module
@@ -1763,7 +1768,7 @@ jobs:
       # 2. 打包 AnyKernel3 (原版 Image 定位逻辑)
       - name: Package AnyKernel3 Zip
         run: |
-          AK3ZIP_NAME="AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}.zip"
+          AK3ZIP_NAME="AnyKernel3_ReSukiSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}.zip"
           cd AnyKernel3
           zip -r "../$AK3ZIP_NAME" ./*
           echo "AK3ZIP_NAME=$AK3ZIP_NAME" >> $GITHUB_ENV
@@ -1782,7 +1787,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          name: "Kernel Build ${{ env.TAG_NAME }} (SukiSU ${{ env.LATEST_COMMIT_HASH }})"
+          name: "Kernel Build ${{ env.TAG_NAME }} (ReSukiSU ${{ env.LATEST_COMMIT_HASH }})"
           body: |
             ### 构建详情
             - **设备配置**: `${{ github.event.inputs.FILE }}`
@@ -1790,7 +1795,7 @@ jobs:
             - **Android 版本**: `${{ env.ANDROID_VERSION }}`
             - **构建模式**: `${{ github.event.inputs.FAST_BUILD == 'true' && '极速构建 (Fast)' || '常规构建' }}`
             - **集成模块**:
-                - SukiSU Ultra: `${{ env.LATEST_COMMIT_HASH }}`
+                - ReSukiSU: `${{ env.LATEST_COMMIT_HASH }}`
                 - SUSFS: `${{ github.event.inputs.SUSFS_META != '-1' && '✅' || '❌' }}`
                 - ZRAM 优化: `${{ env.ZRAM_ALGO }} (${{ env.ZRAM_SIZE }})`
           files: |
