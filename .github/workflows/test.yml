@@ -1771,25 +1771,3 @@ jobs:
           cd ZRAM-Module
           zip -r "../$ZRAM_ZIP_NAME" ./*
           echo "ZRAM_ZIP_NAME=$ZRAM_ZIP_NAME" >> $GITHUB_ENV
-
-      # 4. 执行 Release 上传
-      - name: Create and Upload to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: "Kernel Build ${{ env.TAG_NAME }} (ReSukiSU ${{ env.LATEST_COMMIT_HASH }})"
-          body: |
-            ### 构建详情
-            - **设备配置**: `${{ github.event.inputs.FILE }}`
-            - **内核版本**: `${{ env.TKERNEL_VERSION }}`
-            - **Android 版本**: `${{ env.ANDROID_VERSION }}`
-            - **构建模式**: `${{ github.event.inputs.FAST_BUILD == 'true' && '极速构建 (Fast)' || '常规构建' }}`
-            - **集成模块**:
-                - ReSukiSU: `${{ env.LATEST_COMMIT_HASH }}`
-                - SUSFS: `${{ github.event.inputs.SUSFS_META != '-1' && '✅' || '❌' }}`
-                - ZRAM 优化: `${{ env.ZRAM_ALGO }} (${{ env.ZRAM_SIZE }})`
-          files: |
-            ${{ env.AK3ZIP_NAME }}
-            ${{ env.ZRAM_ZIP_NAME }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
