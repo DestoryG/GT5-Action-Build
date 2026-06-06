@@ -696,7 +696,7 @@ jobs:
           echo "manager_branch=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "manager_artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
 
-      - name: Add SukiSU Ultra
+      - name: Add ReSukiSU
         run: |
           cd kernel_workspace/kernel_platform
           echo "🚀 [DEBUG 1] 当前工作目录: $(pwd)"
@@ -769,7 +769,7 @@ jobs:
           echo "::group::最终验证 Makefile 尾部内容"
           tail -n 15 kernel/Makefile
           echo "::endgroup::"
-      - name: Apply Patches SukiSU Ultra
+      - name: Apply Patches ReSukiSU
         env:
           FILE: ${{ github.event.inputs.FILE }}
         run: |
@@ -1629,7 +1629,7 @@ jobs:
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v7
         with:
-          name: AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}
+          name: AnyKernel3_ReSukiSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.TKERNEL_VERSION }})${{ steps.suffix.outputs.value }}
           path: ./AnyKernel3/*
 
       - name: Extract and Process ZRAM Module
