@@ -1134,6 +1134,7 @@ jobs:
 
           # SukiSU Ultra配置
           set_config "CONFIG_KSU=y"
+          set_config "CONFIG_KSU_MANUAL_HOOK=y"
 
           # KPM配置
           if [ "${{ github.event.inputs.KPM }}" = "KPM" ] || [ "${{ github.event.inputs.KPM }}" = "N/A" ]; then
