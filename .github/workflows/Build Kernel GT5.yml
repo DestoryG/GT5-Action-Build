@@ -152,7 +152,7 @@ jobs:
           git config --global user.name "Numbersf"
           git config --global user.email "263623064@qq.com"
           mkdir kernel_workspace && cd kernel_workspace
-          git clone https://github.com/DestoryG/Action-Build.git -b SukiSU-Ultra
+          git clone https://github.com/Numbersf/Action-Build.git -b SukiSU-Ultra
 
       - name: Maximize Build Space
         if: ${{ github.event.inputs.SPACE_NOCLEAN == 'false' }}
