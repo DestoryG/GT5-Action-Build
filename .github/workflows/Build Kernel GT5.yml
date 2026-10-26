@@ -344,7 +344,7 @@ jobs:
           fi
 
       - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+        uses: owenthereal/action-upterm@v1
         timeout-minutes: 15
 
       - name: Reject Check
