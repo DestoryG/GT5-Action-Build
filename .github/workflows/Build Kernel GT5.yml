@@ -651,7 +651,7 @@ jobs:
           echo "manager_branch=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "manager_artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
 
-      - name: Add ReSukiSU
+      - name: Add BakaSU
         run: |
           cd kernel_workspace/kernel_platform
           echo "🚀 [DEBUG 1] 当前工作目录: $(pwd)"
@@ -677,7 +677,7 @@ jobs:
           echo "🚀 [DEBUG 3] 解析完成 -> 分支名: $BRANCH_NAME | 标签: $CUSTOM_TAG | 哈希: $MANUAL_HASH"
 
           echo "🌐 [DEBUG 4] 开始拉取上游 setup.sh..."
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/${MANAGER_BRANCH_REAL}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
+          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/${MANAGER_BRANCH_REAL}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
           
           if [ ! -d "./KernelSU" ]; then
             echo "❌ 错误: ./KernelSU 目录不存在，上游拉取或集成失败！"
@@ -725,7 +725,7 @@ jobs:
         run: |
           kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/PatchFakePatches.kts" apply "$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/common"
 
-      - name: Apply Patches ReSukiSU
+      - name: Apply Patches BakaSU
         env:
           FILE: ${{ github.event.inputs.FILE }}
         run: |
@@ -1503,7 +1503,7 @@ jobs:
           wget -O ksu_module_susfs_1.5.2+_Release.zip https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
           cp ksu_module_susfs_1.5.2+_Release.zip ./AnyKernel3/
 
-      - name: Download Latest ReSukiSU APK from CI
+      - name: Download Latest BakaSU APK from CI
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1514,14 +1514,14 @@ jobs:
           echo "Using branch: $MANAGER_BRANCH"
           echo "Downloading artifact: $MANAGER_ARTIFACT"
 
-          run_id=$(gh api "repos/ReSukiSU/ReSukiSU/actions/workflows/build-manager.yml/runs?branch=$MANAGER_BRANCH&status=success&per_page=1" --jq '.workflow_runs[0].id' || echo "")
+          run_id=$(gh api "repos/Baka-SU/BakaSU/actions/workflows/build-manager.yml/runs?branch=$MANAGER_BRANCH&status=success&per_page=1" --jq '.workflow_runs[0].id' || echo "")
 
           if [[ -z "$run_id" ]]; then
             echo "⚠️ No successful workflow run found on branch $MANAGER_BRANCH. Skipping download."
             exit 0
           fi
           
-          artifact_url=$(gh api "repos/ReSukiSU/ReSukiSU/actions/runs/$run_id/artifacts" | jq -r ".artifacts[] | select(.name == \"$MANAGER_ARTIFACT\") | .archive_download_url" | head -n1)
+          artifact_url=$(gh api "repos/Baka-SU/BakaSU/actions/runs/$run_id/artifacts" | jq -r ".artifacts[] | select(.name == \"$MANAGER_ARTIFACT\") | .archive_download_url" | head -n1)
 
           if [[ -z "$artifact_url" ]]; then
             echo "⚠️ No artifact '$MANAGER_ARTIFACT' found in run $run_id. Skipping download."
@@ -1549,7 +1549,7 @@ jobs:
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v7
         with:
-          name: AnyKernel3_ReSukiSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.CKERNEL_VERSION }})${{ steps.suffix.outputs.value }}
+          name: AnyKernel3_BakaSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.CKERNEL_VERSION }})${{ steps.suffix.outputs.value }}
           path: ./AnyKernel3/*
 
       - name: Extract and Process ZRAM Module
@@ -1668,13 +1668,13 @@ jobs:
         run: |
           TAG_NAME=$(date +"%Y.%m.%d-%H%M")
           echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_ENV
-          # 获取 ReSukiSU 提交 hash 用于显示
+          # 获取 BakaSU 提交 hash 用于显示
           COMMIT_HASH=$(cd kernel_workspace/kernel_platform/KernelSU && git rev-parse --short HEAD || echo "unknown")
           echo "LATEST_COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
 
       - name: Package AnyKernel3 Zip
         run: |
-          AK3ZIP_NAME="AnyKernel3_ReSukiSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.CKERNEL_VERSION }})${{ steps.suffix.outputs.value }}.zip"
+          AK3ZIP_NAME="AnyKernel3_BakaSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.CKERNEL_VERSION }})${{ steps.suffix.outputs.value }}.zip"
           cd AnyKernel3
           zip -r "../$AK3ZIP_NAME" ./*
           echo "AK3ZIP_NAME=$AK3ZIP_NAME" >> $GITHUB_ENV
@@ -1691,7 +1691,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          name: "Kernel Build ${{ env.TAG_NAME }} (ReSukiSU ${{ env.LATEST_COMMIT_HASH }})"
+          name: "Kernel Build ${{ env.TAG_NAME }} (BakaSU ${{ env.LATEST_COMMIT_HASH }})"
           body: |
             ### 构建详情
             - **设备配置**: `${{ github.event.inputs.FILE }}`
@@ -1699,8 +1699,8 @@ jobs:
             - **Android 版本**: `${{ env.ANDROID_VERSION }}`
             - **构建模式**: `${{ github.event.inputs.FAST_BUILD == 'true' && '极速构建 (Fast)' || '常规构建' }}`
             - **集成模块**:
-                - ReSukiSU: `${{ env.LATEST_COMMIT_HASH }}`
-                - SUSFS: `${{ github.event.inputs.SUSFS_META != '-1' && '✅' || '❌' }}`
+                - BakaSU: `${{ env.LATEST_COMMIT_HASH }}`
+                - 额外的SUSFS管理模块: `${{ github.event.inputs.SUSFS_META != '-1' && '✅' || '❌' }}`
                 - ZRAM 优化: `${{ env.ZRAM_ALGO }} (${{ env.ZRAM_SIZE }})`
           files: |
             ${{ env.AK3ZIP_NAME }}
