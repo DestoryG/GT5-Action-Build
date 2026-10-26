@@ -14,7 +14,7 @@ on:
         type: choice
         description: "管理器调用方向"
         required: true
-        default: MIUIX
+        default: MD3
         options:
           - MIUIX
           - MIUIX_SPOOF
