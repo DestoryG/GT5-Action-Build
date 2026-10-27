@@ -5,7 +5,7 @@ permissions:
   actions: write
 
 env:
-  UPSTREAM_REPO: ReSukiSU/ReSukiSU
+  UPSTREAM_REPO: Baka-SU/BakaSU
   UPSTREAM_BRANCH: main
 
 on:
