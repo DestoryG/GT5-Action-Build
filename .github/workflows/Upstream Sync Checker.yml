@@ -1,0 +1,100 @@
+
+name: Upstream Sync Checker
+
+on:
+  schedule:
+    # 每天北京时间上午 10 点检查
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync-check
+  cancel-in-progress: false
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GT5 repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/Numbersf/Action-Build.git
+          git fetch upstream SukiSU-Ultra
+
+      - name: Generate upstream report
+        id: report
+        shell: bash
+        run: |
+          UPSTREAM="upstream/SukiSU-Ultra"
+          BASE="HEAD"
+
+          COUNT=$(git rev-list --count "$BASE..$UPSTREAM")
+
+          mkdir -p .github
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No upstream commits."
+            exit 0
+          fi
+
+          {
+            echo "# Numbersf/Action-Build 上游更新报告"
+            echo
+            echo "- 上游仓库: [Numbersf/Action-Build](https://github.com/Numbersf/Action-Build)"
+            echo "- 上游分支: \`SukiSU-Ultra\`"
+            echo "- 当前上游 HEAD: \`$(git rev-parse --short "$UPSTREAM")\`"
+            echo "- 新增提交数: $COUNT"
+            echo
+            echo "## 影响构建框架的提交"
+            echo
+            git log --no-merges --format='- `%h` %cs %s' \
+              "$BASE..$UPSTREAM" -- scripts patches lib
+            echo
+            echo "## 上游 Workflow 相关提交"
+            echo
+            git log --no-merges --format='- `%h` %cs %s' \
+              "$BASE..$UPSTREAM" -- \
+              '.github/workflows/Build Kernel OnePlus.yml'
+            echo
+            echo "## 上游文件变化概览"
+            echo
+            echo '```text'
+            git diff --stat "$BASE" "$UPSTREAM" -- \
+              scripts patches lib \
+              '.github/workflows/Build Kernel OnePlus.yml'
+            echo '```'
+            echo
+            echo "## 注意"
+            echo
+            echo "本报告只用于检查上游变化，不会覆盖 GT5 的 BakaSU、MIUIX、MD3 等定制逻辑。"
+          } > .github/upstream-sync-report.md
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update sync PR
+        if: steps.report.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/upstream-sync-report
+          delete-branch: true
+          commit-message: "ci: update upstream sync report"
+          title: "Upstream Update: Numbersf/Action-Build"
+          body: |
+            检测到 Numbersf/Action-Build 上游存在新提交。
+
+            请查看报告，人工判断哪些改动适用于 GT5。
+
+            **注意：本 PR 不会自动覆盖 GT5 Workflow。**
+          add-paths: |
+            .github/upstream-sync-report.md
