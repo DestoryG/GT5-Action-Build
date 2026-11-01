@@ -10,16 +10,6 @@ on:
         options:
           - realme_gt5_b
           - realme_gt5_v
-      MANAGER_SOURCE:
-        type: choice
-        description: "管理器调用方向"
-        required: true
-        default: MIUIX
-        options:
-          - MIUIX
-          - MIUIX_SPOOF
-          - MD3
-          - MD3_SPOOF
       SUSFS_CI:
         type: choice
         description: "SUSFS模块下载调用方向//SUSFS module branch"
@@ -52,12 +42,12 @@ on:
         type: string
         description: "自定义构建时间(输入F使用UTCT或-1关闭)//Custom build time (Enter F to use UTCT, or -1 to disable)"
         required: false
-        default: "Thu Dec 11 04:17:27 UTC 2025"
+        default: "Thu Dec 11 04:17:27 UTC 2025"    
       KSU_META:
         type: string
-        description: "分支名(必填)/自定义版本标识(留空不修改)/回退分支提交哈希版本(留空不修改)"
+        description: "管理器分支名(必填)/内置分支名(必填)/自定义版本标识(留空不修改)/回退分支提交哈希版本(留空不修改)//Manager Branch name (Required) / Builtin branch name (Required) / Custom version identifier (Leave blank to not modify) / Rollback branch commit hash version (Leave blank to not modify)"
         required: false
-        default: "main/DestoryG-Presents/"
+        default: "main/main/DestoryG-Presents/"
       LZ4_UPDATE:
         type: boolean
         description: "是否升级LZ4到上游最新？//Upgrade LZ4 to the latest upstream?"
@@ -149,6 +139,7 @@ jobs:
       CCACHE_IS_KERNEL_COMPILING: "true"
       CCACHE_MAXSIZE: 5G
     steps:
+
       - name: Maximize Build Space
         if: ${{ github.event.inputs.SPACE_NOCLEAN == 'false' }}
         env:
@@ -158,17 +149,10 @@ jobs:
           REMOVE_ANDROID: 'true'
           REMOVE_HASKELL: 'true'
           REMOVE_CODEQL: 'true'
-        run: |
-          if [ -f "scripts/maximize-build-space.sh" ]; then
-            bash scripts/maximize-build-space.sh
-          elif [ -f "kernel_workspace/Action-Build/scripts/maximize-build-space.sh" ]; then
-            bash kernel_workspace/Action-Build/scripts/maximize-build-space.sh
-          else
-            curl -sL "https://raw.githubusercontent.com/Numbersf/Action-Build/SukiSU-Ultra/scripts/maximize-build-space.sh" | bash
-          fi
+        run: bash scripts/maximize-build-space.sh
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Configure Git
         run: |
@@ -176,7 +160,7 @@ jobs:
           git config --global user.email "263623064@qq.com"
           mkdir kernel_workspace && cd kernel_workspace
           git clone https://github.com/Numbersf/Action-Build.git -b SukiSU-Ultra
-          
+
       - name: Extract Manifest Info
         id: extract_info
         env:
@@ -299,7 +283,6 @@ jobs:
           echo "Selected ANDROID_VERSION: ${{ env.ANDROID_VERSION }}"
           echo "Selected BUILD_METHOD: ${{ env.BUILD_METHOD }}"
           echo "Selected FILE: ${{ github.event.inputs.FILE }}"
-          echo "Selected MANAGER_SOURCE: ${{ github.event.inputs.MANAGER_SOURCE }}"
           echo "Selected SUSFS_CI: ${{ github.event.inputs.SUSFS_CI }}"
           if [ "${{ github.event.inputs.SUSFS_CI }}" != "N/A" ]; then
             echo "::warning title=SUSFS Not Required::当前管理器已自带附加模块，无需启用 SUSFS 模块，强制启用可能导致不开机。"
@@ -319,7 +302,11 @@ jobs:
           echo "Selected RE_KERNEL: ${{ github.event.inputs.RE_KERNEL }}"
           echo "Selected LZ4_UPDATE: ${{ github.event.inputs.LZ4_UPDATE }}"
           echo "Custom BUILD_TIME: $BUILD_TIME"
-          echo "------------------------------"
+          echo -n "BUILD_TIME Unicode: "
+          CHECK_TEXT="$BUILD_TIME" python3 "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/check_unicode_format.py" --mode build_time
+          echo "Custom SUFFIX: $SUFFIX"
+          echo -n "SUFFIX Unicode: "
+          CHECK_TEXT="$SUFFIX" python3 "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/check_unicode_format.py" --mode suffix
 
       - name: Check Disk Space
         run: df -h
@@ -347,12 +334,6 @@ jobs:
           if [ -n "$parent" ] && [ "$parent" != "Numbersf/Action-Build" ]; then
             echo "::warning title=Source Warning::您使用的内核编译地址为非官方源，可能导致运行失败或内核异常。"
           fi
-
-      - name: Setup upterm session
-        if: ${{ github.event.inputs.BUILD_DEBUG == 'true' }}
-        uses: owenthereal/action-upterm@v2
-        with:
-          limit-access-to-actor: true
 
       - name: Reject Check
         run: |
@@ -624,108 +605,86 @@ jobs:
             chmod +x "$f"
           done
 
-      - name: Resolve Manager Source
-        id: manager
-        run: |
-          MANAGER_SOURCE="${{ github.event.inputs.MANAGER_SOURCE }}"
-
-          case "$MANAGER_SOURCE" in
-            MD3)
-              BRANCH="main"
-              ARTIFACT="Manager-release"
-              ;;
-            MD3_SPOOF)
-              BRANCH="main"
-              ARTIFACT="Spoofed-Manager-release"
-              ;;
-            MIUIX_SPOOF)
-              BRANCH="main"
-              ARTIFACT="Spoofed-Manager-release"
-              ;;
-            MIUIX|*)
-              BRANCH="main"
-              ARTIFACT="Manager-release"
-              ;;
-          esac
-
-          echo "manager_branch=$BRANCH" >> "$GITHUB_OUTPUT"
-          echo "manager_artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
-
-      - name: Add BakaSU
+      - name: Add SukiSU Ultra
         run: |
           cd kernel_workspace/kernel_platform
-          echo "🚀 [DEBUG 1] 当前工作目录: $(pwd)"
-          
-          MANAGER_BRANCH="${{ github.event.inputs.MANAGER_SOURCE }}"
-          if [ "$MANAGER_BRANCH" = "MD3" ] || [ "$MANAGER_BRANCH" = "MD3_SPOOF" ]; then
-            MANAGER_BRANCH_REAL="old"
-          else
-            MANAGER_BRANCH_REAL="main"
-          fi
-          
           KSU_META="${{ github.event.inputs.KSU_META }}"
-          echo "🚀 [DEBUG 2] 接收到的 KSU_META 为: $KSU_META"
 
-          SLASH_COUNT=$(grep -o '/' <<< "$KSU_META" | wc -l)
-          if [ "$SLASH_COUNT" -lt 2 ]; then
-            echo "❌ 错误: KSU_META 参数缺少必要的分隔符 '/'，格式应为: 分支名/自定义标识/提交hash"
+          # 必须包含两个分隔符（至少四个字段）
+          if [[ "$(grep -o '/' <<< "$KSU_META" | wc -l)" -lt 3 ]]; then
+            echo "错误: KSU_META 参数缺少必要的分隔符 '/'，格式应为: 管理器分支名/内置分支名/自定义标识(可省略)/提交hash(可省略)"
             exit 10
           fi
 
-          IFS='/' read -r BRANCH_NAME CUSTOM_TAG MANUAL_HASH <<< "$KSU_META" || true
-          
-          echo "🚀 [DEBUG 3] 解析完成 -> 分支名: $BRANCH_NAME | 标签: $CUSTOM_TAG | 哈希: $MANUAL_HASH"
+          # 解析字段：分支 / 自定义标识 / 手动 hash
+          IFS='/' read -r KSU_MANAGER_BRANCH KSU_BUILTIN_BRANCH KSU_CUSTOM_TAG MANUAL_HASH <<< "$KSU_META"
+          echo "KSU_MANAGER_BRANCH=$KSU_MANAGER_BRANCH" >> $GITHUB_ENV
+          echo "KSU_BUILTIN_BRANCH=$KSU_BUILTIN_BRANCH" >> $GITHUB_ENV
+          [[ -n "$KSU_CUSTOM_TAG" ]] && echo "自定义版本标识: $KSU_CUSTOM_TAG" || echo "自定义版本标识: 未启用"
+          [[ -n "$MANUAL_HASH" ]] && echo "手动指定 hash: $MANUAL_HASH" || echo "手动指定 hash: 未启用"
 
-          echo "🌐 [DEBUG 4] 开始拉取上游 setup.sh..."
-          curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/${MANAGER_BRANCH_REAL}/kernel/setup.sh" | bash -s "$BRANCH_NAME"
-          
-          if [ ! -d "./KernelSU" ]; then
-            echo "❌ 错误: ./KernelSU 目录不存在，上游拉取或集成失败！"
-            exit 1
-          fi
-          
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/${KSU_MANAGER_BRANCH}/kernel/setup.sh" | bash -s "$KSU_BUILTIN_BRANCH"
           cd ./KernelSU
-          echo "🚀 [DEBUG 5] 成功进入 KernelSU 目录"
 
-          if [ -n "$MANUAL_HASH" ]; then
-            echo "⚙️ 正在切换到指定的提交哈希: $MANUAL_HASH"
-            git fetch origin "$BRANCH_NAME" --depth=50
+          # 如果指定了手动 hash，就切换到该提交
+          if [[ -n "$MANUAL_HASH" ]]; then
+            git fetch origin "$KSU_BUILTIN_BRANCH" --depth=50
             git checkout "$MANUAL_HASH"
+            SHORT_HASH=${MANUAL_HASH:0:8}
           fi
 
-          GIT_HASH=$(git rev-parse --short HEAD)
-          echo "🚀 [DEBUG 6] 本地 KernelSU Git HASH: $GIT_HASH"
-
-          KSU_VERSION_TAG="4.1.0"
+          KSU_VERSION_TAG=$(curl -fsSL https://api.github.com/repos/SukiSU-Ultra/SukiSU-Ultra/releases/latest \
+            | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
+          if [[ -z "$KSU_VERSION_TAG" || "$(printf '%s\n' "$KSU_VERSION_TAG" "3.1.7" | sort -V | head -n1)" != "3.1.7" ]]; then
+            KSU_VERSION_TAG="3.1.7"
+          fi
           echo "KSU_VERSION_TAG=$KSU_VERSION_TAG" >> $GITHUB_ENV
 
-          if [ -z "$CUSTOM_TAG" ]; then
-            VERSION_FULL="v$KSU_VERSION_TAG-$GIT_HASH@$BRANCH_NAME"
+          GIT_HASH=$(git rev-parse --short HEAD)
+          echo "GIT_HASH=$GIT_HASH"
+
+          # 组装版本号
+          if [[ -n "$MANUAL_HASH" ]]; then
+            USE_HASH="$SHORT_HASH"
           else
-            VERSION_FULL="v$KSU_VERSION_TAG-$CUSTOM_TAG@$BRANCH_NAME[$GIT_HASH]"
+            USE_HASH="$GIT_HASH"
           fi
-          echo "🚀 [DEBUG 7] 准备写入的版本号: $VERSION_FULL"
+          if [[ -z "$KSU_CUSTOM_TAG" ]]; then
+            VERSION_FULL="v$KSU_VERSION_TAG-$USE_HASH@$KSU_BUILTIN_BRANCH"
+          else
+            VERSION_FULL="v$KSU_VERSION_TAG-$KSU_CUSTOM_TAG@$KSU_BUILTIN_BRANCH[$USE_HASH]"
+          fi
 
-          echo "" | sudo tee -a kernel/Makefile > /dev/null
-          echo "KSU_VERSION_FULL := $VERSION_FULL" | sudo tee -a kernel/Makefile > /dev/null
-          echo "KSU_VERSION_API := $KSU_VERSION_TAG" | sudo tee -a kernel/Makefile > /dev/null
-          echo "🚀 [DEBUG 8] Makefile 写入完成"
+          ESC_VERSION_FULL=$(printf '%s' "$VERSION_FULL" | sed 's/[&|\\/]/\\&/g')
+          ESC_KSU_VERSION_TAG=$(printf '%s' "$KSU_VERSION_TAG" | sed 's/[&|\\/]/\\&/g')
 
-          # 计算 Manager 所需的版本序列号
-          KSU_VERSION=$(expr $(git rev-list --count HEAD 2>/dev/null || echo 13000) + 30700)
+          if grep -q '^KSU_VERSION_FULL := ' kernel/Makefile; then
+            sed -i "s|^KSU_VERSION_FULL := .*|KSU_VERSION_FULL := $ESC_VERSION_FULL|" kernel/Makefile
+          else
+            awk -v full="$VERSION_FULL" '
+              /^REPO_OWNER :=/ && !done {
+                print
+                print ""
+                print "KSU_VERSION_FULL := " full
+                done=1
+                next
+              }
+              { print }
+            ' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile
+          fi
+
+          if grep -q '^KSU_VERSION_API := ' kernel/Makefile; then
+            sed -i "s|^KSU_VERSION_API := .*|KSU_VERSION_API := $ESC_KSU_VERSION_TAG|" kernel/Makefile
+          fi
+
+          KSU_VERSION=$(expr $(git rev-list --count "$KSU_MANAGER_BRANCH" 2>/dev/null || echo 13000) + 37185)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          echo "🚀 [DEBUG 9] KSUVER 计算完成: $KSU_VERSION"
 
-          echo "::group::最终验证 Makefile 尾部内容"
-          tail -n 15 kernel/Makefile
+          echo "::group::最终 Makefile 中版本信息及部分调试结果预览"
+          grep -nE '^(REPO_OWNER|REPO_NAME|REPO_BRANCH|KSU_VERSION_API|KSU_VERSION_FULL|VERSION_TAG|GIT_BIN|CURL_BIN)' kernel/Makefile
           echo "::endgroup::"
 
-      - name: Apply Fake Patches
-        if: ${{ github.event.inputs.SUSFS_META != '-1' }}
-        run: |
-          kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/PatchFakePatches.kts" apply "$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/common"
-
-      - name: Apply Patches BakaSU
+      - name: Apply Patches SukiSU Ultra
         env:
           FILE: ${{ github.event.inputs.FILE }}
         run: |
@@ -770,6 +729,10 @@ jobs:
 
           cd ./common
 
+          if [ "${{ github.event.inputs.SUSFS_META }}" != "-1" ]; then
+            kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/SusfsCompat.kts" apply "$PWD"
+          fi
+
           if [ "$KMI" == "android13-5.15" ] && [ "$SUBLEVEL" -lt 123 ]; then
             echo "修复内核版本为5.15.0~5.15.123仅支持旧版C库造成的一些bug"
             cp "${GITHUB_WORKSPACE}/kernel_workspace/Action-Build/patches/fix_5.15.legacy" ./fix_5.15.legacy.patch
@@ -779,17 +742,17 @@ jobs:
 
           if [ "${{ github.event.inputs.SUSFS_META }}" != "-1" ]; then
             echo "正在打susfs补丁"
+            kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/SusfsContext.kts" "$PWD" "$PWD/50_add_susfs_in_gki-${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch"
             patch -p1 < 50_add_susfs_in_gki-${{ env.KANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
             echo "susfs_patch完成"
           fi
           source $REJ_CHECKER
           check_rejects .
 
-      - name: Revert and Postfix Fake Patches
-        if: ${{ github.event.inputs.SUSFS_META != '-1' }}
-        run: |
-          kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/PatchFakePatches.kts" postfix "$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/common"
-          kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/PatchFakePatches.kts" revert "$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/common"
+          if [ "${{ github.event.inputs.SUSFS_META }}" != "-1" ]; then
+            kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/SusfsCompat.kts" postfix "$PWD"
+            kotlin "$GITHUB_WORKSPACE/kernel_workspace/Action-Build/scripts/SusfsCompat.kts" revert "$PWD"
+          fi
 
       # OGKI转换GKI，无需修改 dtbo 开机
       - name: Apply Convert HMBIRD_OGKI to HMBIRD_GKI
@@ -847,7 +810,6 @@ jobs:
           sed -i '$a \#Re-Kernel Support\nobj-$(CONFIG_REKERNEL) += rekernel/' drivers/Makefile
           mkdir -p drivers/rekernel
           cp -r "${RE_DIR}"/* drivers/rekernel/
-          sed -i "s|^\s*//\s*#define KERNEL_${KERNEL_SHORT_PATCH_VERSION}|\#define KERNEL_${KERNEL_SHORT_PATCH_VERSION}|" drivers/rekernel/rekernel.h 2>/dev/null || true
           if [ -f BUILD.bazel ]; then
             sed -i '0,/name = "kernel_aarch64",/{/module_implicit_outs/s|,$| + ["drivers/rekernel/rekernel.ko"],|}' BUILD.bazel
           fi
@@ -1060,20 +1022,12 @@ jobs:
 
           # BBR & ECN配置*
           if [ "${{ github.event.inputs.CCM }}" = "true" ]; then
-            sed -i '/CONFIG_DEFAULT_CUBIC=y/d' "$CONFIG_FILE"
-            sed -i '/CONFIG_DEFAULT_PFIFO_FAST=y/d' "$CONFIG_FILE"
-
             set_hide_config "CONFIG_TCP_CONG_ADVANCED=y"
             set_config "CONFIG_TCP_CONG_BBR=y"
             if [ "$KMI" != "android16-6.12" ]; then
               set_config "CONFIG_TCP_CONG_BBR3=y"
             fi
-            set_config "CONFIG_DEFAULT_BBR=y"
-            set_config "CONFIG_DEFAULT_TCP_CONG=\"bbr\""
             set_config "CONFIG_NET_SCH_FQ=y"
-            set_config "CONFIG_NET_SCH_DEFAULT=y"
-            set_config "CONFIG_DEFAULT_FQ=y"
-            set_config "CONFIG_DEFAULT_NET_SCH=\"fq\""
             set_config "CONFIG_TCP_CONG_BIC=n"
             set_config "CONFIG_TCP_CONG_WESTWOOD=n"
             set_config "CONFIG_TCP_CONG_HTCP=n"
@@ -1503,43 +1457,31 @@ jobs:
           wget -O ksu_module_susfs_1.5.2+_Release.zip https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
           cp ksu_module_susfs_1.5.2+_Release.zip ./AnyKernel3/
 
-      - name: Download Latest BakaSU APK from CI
+      - name: Download Latest SukiSU-Ultra APK from CI
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          MANAGER_BRANCH="${{ steps.manager.outputs.manager_branch }}"
-          MANAGER_ARTIFACT="${{ steps.manager.outputs.manager_artifact }}"
+          MANAGER_ARTIFACT=Manager
 
-          echo "Using branch: $MANAGER_BRANCH"
+          echo "Using branch: $KSU_MANAGER_BRANCH"
           echo "Downloading artifact: $MANAGER_ARTIFACT"
 
-          run_id=$(gh api "repos/Baka-SU/BakaSU/actions/workflows/build-manager.yml/runs?branch=$MANAGER_BRANCH&status=success&per_page=1" --jq '.workflow_runs[0].id' || echo "")
+          run_id=$(gh api "repos/SukiSU-Ultra/SukiSU-Ultra/actions/workflows/build-manager.yml/runs?branch=$KSU_MANAGER_BRANCH&status=success&event=push&per_page=1" --jq '.workflow_runs[0].id' || echo "")
 
           if [[ -z "$run_id" ]]; then
-            echo "⚠️ No successful workflow run found on branch $MANAGER_BRANCH. Skipping download."
+            echo "No successful workflow run found on branch $KSU_MANAGER_BRANCH. Skipping download."
             exit 0
           fi
-          
-          artifact_url=$(gh api "repos/Baka-SU/BakaSU/actions/runs/$run_id/artifacts" | jq -r ".artifacts[] | select(.name == \"$MANAGER_ARTIFACT\") | .archive_download_url" | head -n1)
+          artifact_url=$(gh api "repos/SukiSU-Ultra/SukiSU-Ultra/actions/runs/$run_id/artifacts" | jq -r ".artifacts[] | select(.name == \"$MANAGER_ARTIFACT\") | .archive_download_url" | head -n1)
 
           if [[ -z "$artifact_url" ]]; then
-            echo "⚠️ No artifact '$MANAGER_ARTIFACT' found in run $run_id. Skipping download."
+            echo "No artifact '$MANAGER_ARTIFACT' found in run $run_id. Skipping download."
             exit 0
           fi
-          
           echo "Downloading from: $artifact_url"
           curl -fL -H "Authorization: token $GITHUB_TOKEN" -o "${MANAGER_ARTIFACT}.zip" "$artifact_url"
-          
-          echo "📦 正在解压并筛选提取 arm64-v8a 架构的 APK..."
-          unzip -j "${MANAGER_ARTIFACT}.zip" "*arm64-v8a*.apk" -d ./AnyKernel3/
-          
-          echo "✅ AnyKernel3 目录下的 APK 部署情况："
-          if ls ./AnyKernel3/ | grep -q "arm64-v8a"; then
-            ls -l ./AnyKernel3/*arm64-v8a*.apk
-          else
-            echo "❌ 未成功提取到目标 arm64-v8a APK 文件，请检查上游压缩包内部路径结构"
-          fi
+          unzip -j "${MANAGER_ARTIFACT}.zip" "*.apk" -d ./AnyKernel3/
 
       - name: Set zip Suffix
         id: suffix
@@ -1549,7 +1491,7 @@ jobs:
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v7
         with:
-          name: AnyKernel3_BakaSU_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.CKERNEL_VERSION }})${{ steps.suffix.outputs.value }}
+          name: AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.extract_info.outputs.value }}(${{ env.CKERNEL_VERSION }})${{ steps.suffix.outputs.value }}
           path: ./AnyKernel3/*
 
       - name: Extract and Process ZRAM Module
