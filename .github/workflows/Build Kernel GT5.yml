@@ -139,7 +139,10 @@ jobs:
       CCACHE_IS_KERNEL_COMPILING: "true"
       CCACHE_MAXSIZE: 5G
     steps:
-
+    
+      - name: Checkout
+        uses: actions/checkout@v7
+        
       - name: Maximize Build Space
         if: ${{ github.event.inputs.SPACE_NOCLEAN == 'false' }}
         env:
@@ -150,9 +153,6 @@ jobs:
           REMOVE_HASKELL: 'true'
           REMOVE_CODEQL: 'true'
         run: bash scripts/maximize-build-space.sh
-
-      - name: Checkout
-        uses: actions/checkout@v7
 
       - name: Configure Git
         run: |
