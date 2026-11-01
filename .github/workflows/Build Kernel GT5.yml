@@ -1649,3 +1649,9 @@ jobs:
             ${{ env.ZRAM_ZIP_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Setup upterm session
+        if: ${{ github.event.inputs.BUILD_DEBUG == 'true' }}
+        uses: owenthereal/action-upterm@v2
+        with:
+          limit-access-to-actor: true
