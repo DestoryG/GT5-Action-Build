@@ -2,8 +2,8 @@
 
 - 上游仓库: [Numbersf/Action-Build](https://github.com/Numbersf/Action-Build)
 - 上游分支: `SukiSU-Ultra`
-- 当前上游 HEAD: `1d28ca0`
-- 新增提交数: 3
+- 当前上游 HEAD: `d8e1dff`
+- 新增提交数: 4
 
 ## 影响构建框架的提交
 
@@ -13,16 +13,17 @@
 
 ## 上游 Workflow 相关提交
 
+- `d8e1dff` 2026-11-03 test: use fork's own commits when ahead of upstream
 - `1d28ca0` 2026-10-29 refactor(susfs): rename PatchFakePatches to SusfsCompat, split out SusfsContext
 - `9133c0a` 2026-10-28 feat(patch): add context mode to restore missing trace/hooks includes
 
 ## 上游文件变化概览
 
 ```text
- .github/workflows/Build Kernel OnePlus.yml        | 1644 +++++++++++++++++++++
+ .github/workflows/Build Kernel OnePlus.yml        | 1669 +++++++++++++++++++++
  scripts/{PatchFakePatches.kts => SusfsCompat.kts} |   73 +-
  scripts/SusfsContext.kts                          |  119 ++
- 3 files changed, 1777 insertions(+), 59 deletions(-)
+ 3 files changed, 1802 insertions(+), 59 deletions(-)
 ```
 
 ## 注意
